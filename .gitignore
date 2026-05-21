@@ -1,0 +1,29 @@
+# Python envs
+venv/
+.venv/
+ENV/
+env/
+*.pyc
+__pycache__/
+.pytest_cache/
+
+# Local configuration
+.env
+*.local
+
+# IDEs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and archives
+*.log
+backend/reports_archive/

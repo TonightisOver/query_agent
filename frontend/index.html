@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HarnessFlow 2026 LLM API 全球厂商并行分析控制大盘</title>
+    <!-- 引入致敬 Google & Apple 极简科技美学的 Google Sans 替代字体 Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* ==========================================
+         * 1. 致敬 Google & Apple 极简与呼吸感设计系统
+         * ========================================== */
+        :root {
+            /* 浅色高质感配色 (Inspired by Apple HIG & Google Material) */
+            --bg-color: #f5f5f7; /* 经典苹果浅灰背景 */
+            --card-bg: #ffffff;  /* 纯白卡片 */
+            --card-border: rgba(0, 0, 0, 0.06); /* 极致精细边框 */
+            --text-primary: #1d1d1f; /* 曜石黑 */
+            --text-secondary: #86868b; /* 苹果副标题灰 */
+            --apple-blue: #0071e3; /* 苹果系统深蓝 */
+            --google-blue: #1a73e8; /* 谷歌科技蓝 */
+            --google-green: #34c759; /* 苹果草木绿 / 谷歌绿色 */
+            --color-collector: #0071e3;
+            --color-sanitizer: #34c759;
+            --color-analyzer: #f5a623;
+            --color-qc: #ff453a; /* 温润苹果橙红 */
+            --color-qc-ok: #34c759;
+            --color-writer: #bf5af2; /* 苹果粉紫 */
+            --font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-family);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            letter-spacing: -0.015em;
+        }
+
+        /* 极细滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.08);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.16);
+        }
+
+        /* ==========================================
+         * 2. Header 导航与版头 (极简白纸质感)
+         * ========================================== */
+        header {
+            padding: 1.25rem 3rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--card-border);
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: saturate(180%) blur(20px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-badge {
+            background-color: var(--text-primary);
+            color: #ffffff;
+            font-weight: 700;
+            padding: 0.35rem 0.7rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+        }
+
+        .logo-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .status-badge-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .dot-indicator {
+            width: 7px;
+            height: 7px;
+            background-color: #34c759;
+            border-radius: 50%;
+            box-shadow: 0 0 6px rgba(52, 199, 89, 0.4);
+            animation: pulse-dot 2.5s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.6; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* ==========================================
+         * 3. 布局面板与高雅卡片 (致敬 Apple HIG & Material You)
+         * ========================================== */
+        main {
+            flex: 1;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 2.5rem 3rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .row {
+            display: flex;
+            gap: 2rem;
+            width: 100%;
+        }
+
+        .col-left {
+            flex: 3;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .col-right {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 温润微阴影白卡片 */
+        .glass-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 18px;
+            padding: 2rem;
+            box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.04);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.06);
+            border-color: rgba(0,0,0,0.1);
+        }
+
+        .panel-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-primary);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+            padding-bottom: 0.75rem;
+        }
+
+        /* ==========================================
+         * 4. 竞品配置与扁平交互按钮
+         * ========================================== */
+        .config-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .competitor-checkbox {
+            position: relative;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #f5f5f7;
+            border: 1px solid transparent;
+            padding: 0.65rem 1.2rem;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            user-select: none;
+            color: var(--text-primary);
+        }
+
+        .competitor-checkbox input {
+            display: none;
+        }
+
+        .checkbox-custom {
+            width: 15px;
+            height: 15px;
+            border: 1.5px solid #d2d2d7;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            background: #ffffff;
+        }
+
+        .checkbox-custom::after {
+            content: "✓";
+            color: #ffffff;
+            font-size: 0.7rem;
+            font-weight: 700;
+            display: none;
+        }
+
+        .competitor-checkbox input:checked + .checkbox-custom {
+            background-color: var(--apple-blue);
+            border-color: var(--apple-blue);
+        }
+
+        .competitor-checkbox input:checked + .checkbox-custom::after {
+            display: block;
+        }
+
+        .competitor-checkbox:hover {
+            background: #e8e8ed;
+        }
+
+        .competitor-checkbox.checked {
+            background: rgba(0, 113, 227, 0.05);
+            border-color: rgba(0, 113, 227, 0.2);
+            color: var(--apple-blue);
+        }
+
+        /* Apple 标志性高质感按钮 */
+        .action-btn {
+            background: var(--apple-blue);
+            color: #ffffff;
+            border: none;
+            padding: 0.8rem 2.2rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.2);
+            align-self: flex-start;
+        }
+
+        .action-btn:hover {
+            background: #0077ed;
+            transform: scale(1.015);
+            box-shadow: 0 6px 16px rgba(0, 113, 227, 0.3);
+        }
+
+        .action-btn:active {
+            transform: scale(0.985);
+        }
+
+        .action-btn:disabled {
+            background: #e8e8ed;
+            color: #a1a1a6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* ==========================================
+         * 5. ⚡ 实时并发任务状态监控网格样式
+         * ========================================== */
+        .parallel-monitor-card {
+            border: 1px solid rgba(0, 113, 227, 0.15);
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+        }
+
+        .monitor-row {
+            background: #fafafa;
+            border: 1px solid rgba(0, 0, 0, 0.03);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .monitor-row:hover {
+            background: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+            border-color: rgba(0, 113, 227, 0.1);
+        }
+
+        .monitor-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .monitor-name {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .monitor-model {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            background: #e8e8ed;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .monitor-steps {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-top: 0.25rem;
+        }
+
+        .m-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #d2d2d7;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .m-dot.active {
+            background-color: #f5a623;
+            box-shadow: 0 0 6px #f5a623;
+            animation: pulse-mdot 1s infinite alternate;
+        }
+
+        .m-dot.completed {
+            background-color: var(--google-green);
+        }
+
+        .m-dot.failed {
+            background-color: var(--color-qc);
+            box-shadow: 0 0 6px var(--color-qc);
+        }
+
+        .m-step-text {
+            color: var(--text-secondary);
+        }
+
+        .m-step-text.active {
+            color: var(--apple-blue);
+            font-weight: 600;
+        }
+
+        .m-step-text.completed {
+            color: #137333;
+        }
+
+        .m-step-text.failed {
+            color: var(--color-qc);
+            font-weight: 600;
+        }
+
+        @keyframes pulse-mdot {
+            from { transform: scale(1); opacity: 0.7; }
+            to { transform: scale(1.3); opacity: 1; }
+        }
+
+        /* ==========================================
+         * 6. 极致精细的原生 SVG 流程拓扑大盘
+         * ========================================== */
+        .dag-container {
+            width: 100%;
+            height: 230px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #fafafa;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.04);
+            overflow: hidden;
+            position: relative;
+        }
+
+        svg.dag-view {
+            width: 800px;
+            height: 210px;
+        }
+
+        .agent-node {
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .node-rect {
+            fill: #ffffff;
+            stroke: #d2d2d7;
+            stroke-width: 1.5px;
+            rx: 12;
+            ry: 12;
+            transition: all 0.3s ease;
+        }
+
+        .node-label {
+            fill: var(--text-primary);
+            font-size: 13px;
+            font-weight: 600;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            transition: all 0.3s ease;
+        }
+
+        .node-desc {
+            fill: var(--text-secondary);
+            font-size: 10px;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+
+        .agent-node.active .node-rect {
+            stroke-width: 2.5px;
+            stroke: currentColor;
+            fill: rgba(0, 113, 227, 0.02);
+            filter: drop-shadow(0px 4px 10px rgba(0, 0, 0, 0.06));
+            animation: pulse-node 2s infinite alternate;
+        }
+        .agent-node.active .node-label {
+            fill: var(--apple-blue) !important;
+            font-weight: 700;
+        }
+
+        .agent-node.completed .node-rect {
+            fill: rgba(52, 199, 89, 0.03);
+            stroke: var(--google-green);
+            stroke-width: 1.5px;
+        }
+        .agent-node.completed .node-label {
+            fill: #137333;
+        }
+
+        .agent-node.failed .node-rect {
+            fill: rgba(255, 69, 58, 0.04);
+            stroke: var(--color-qc);
+            stroke-width: 2.5px;
+            animation: shake 0.5s ease;
+        }
+        .agent-node.failed .node-label {
+            fill: var(--color-qc);
+            font-weight: 700;
+        }
+
+        .node-collector.active { color: var(--color-collector); }
+        .node-sanitizer.active { color: var(--color-sanitizer); }
+        .node-analyzer.active { color: var(--color-analyzer); }
+        .node-qc.active { color: var(--color-qc); }
+        .node-writer.active { color: var(--color-writer); }
+
+        .edge-path {
+            fill: none;
+            stroke: #e5e5ea;
+            stroke-width: 2px;
+            stroke-dasharray: 4,4;
+            transition: all 0.3s ease;
+        }
+
+        .edge-path.active {
+            stroke: var(--apple-blue);
+            stroke-width: 2.5px;
+            stroke-dasharray: none;
+            animation: flow-path 12s linear infinite;
+        }
+
+        .edge-path.qc-reject {
+            stroke: var(--color-qc);
+            stroke-width: 2px;
+            stroke-dasharray: 4,4;
+            animation: flow-reverse 3s linear infinite;
+        }
+
+        @keyframes flow-path {
+            from { stroke-dashoffset: 150; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        @keyframes flow-reverse {
+            from { stroke-dashoffset: 0; }
+            to { stroke-dashoffset: 80; }
+        }
+
+        @keyframes pulse-node {
+            0% { stroke-width: 2px; }
+            100% { stroke-width: 3.5px; }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-4px); }
+            40%, 80% { transform: translateX(4px); }
+        }
+
+        /* ==========================================
+         * 7. 可观测 Trace 终端大盘 (致敬 Xcode & Chrome Inspector)
+         * ========================================== */
+        .console-container {
+            display: flex;
+            flex-direction: column;
+            height: 550px; /* 增加终端高度 */
+            background: #fafafa;
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Mono", Consolas, monospace;
+        }
+
+        .console-header {
+            background: #ffffff;
+            padding: 0.65rem 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--card-border);
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .console-dots {
+            display: flex;
+            gap: 6px;
+        }
+
+        .c-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .c-dot-red { background: #ff5f56; }
+        .c-dot-yellow { background: #ffbd2e; }
+        .c-dot-green { background: #27c93f; }
+
+        .console-body {
+            flex: 1;
+            padding: 1.25rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            font-size: 0.82rem;
+            line-height: 1.6;
+        }
+
+        .log-entry {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+            animation: fadeInLog 0.2s ease forwards;
+        }
+
+        @keyframes fadeInLog {
+            from { opacity: 0; transform: translateY(3px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .log-time {
+            color: #a1a1a6;
+            user-select: none;
+            font-size: 0.78rem;
+        }
+
+        .log-tag {
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-size: 0.72rem;
+            letter-spacing: 0.3px;
+        }
+
+        .log-tag.system { background: #e8e8ed; color: var(--text-primary); }
+        .log-tag.collector { background: rgba(0, 113, 227, 0.08); color: var(--color-collector); }
+        .log-tag.sanitizer { background: rgba(52, 199, 89, 0.08); color: #137333; }
+        .log-tag.analyzer { background: rgba(245, 166, 35, 0.08); color: #b06000; }
+        .log-tag.qc { background: rgba(255, 69, 58, 0.08); color: var(--color-qc); }
+        .log-tag.qc-ok { background: rgba(52, 199, 89, 0.08); color: #137333; }
+        .log-tag.writer { background: rgba(191, 90, 242, 0.08); color: #7d12b3; }
+
+        .log-text {
+            color: var(--text-primary);
+        }
+
+        /* Apple 优雅的错误警告横幅 */
+        .qc-alert-banner {
+            background: rgba(255, 69, 58, 0.05);
+            border-left: 3px solid var(--color-qc);
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            margin-top: 0.4rem;
+            animation: slideIn 0.25s ease-out;
+            font-size: 0.8rem;
+            color: #d71919;
+            font-weight: 500;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-6px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* ==========================================
+         * 8. 最终竞品分析报告 (极简科技白纸质感)
+         * ========================================== */
+        .report-section {
+            width: 100%;
+        }
+
+        .report-content {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 1.5rem 0.5rem;
+            color: var(--text-primary);
+            line-height: 1.75;
+        }
+
+        .report-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.88rem;
+        }
+
+        .report-content th {
+            background: #f5f5f7;
+            color: var(--text-primary);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+            font-size: 0.85rem;
+        }
+
+        .report-content td {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+            transition: background 0.15s ease;
+        }
+
+        .report-content tr:hover td {
+            background: #fafafa;
+        }
+
+        .report-content h1, .report-content h2, .report-content h3 {
+            color: var(--text-primary);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        .report-content h1 {
+            font-size: 1.4rem;
+            letter-spacing: -0.02em;
+            border-bottom: 1.5px solid var(--text-primary);
+            padding-bottom: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .report-content h2 {
+            font-size: 1.15rem;
+            border-left: 3px solid var(--apple-blue);
+            padding-left: 0.75rem;
+            letter-spacing: -0.01em;
+        }
+
+        .report-content h3 {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+
+        .report-content blockquote {
+            background: #f5f5f7;
+            border-left: 3.5px solid var(--text-primary);
+            padding: 0.75rem 1.25rem;
+            margin: 1.25rem 0;
+            border-radius: 0 6px 6px 0;
+            font-style: italic;
+            color: #515154;
+        }
+
+        .report-content ul {
+            padding-left: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .report-content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .source-trace-link {
+            color: var(--apple-blue);
+            text-decoration: none;
+            border-bottom: 1px dashed var(--apple-blue);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .source-trace-link:hover {
+            color: #ffffff;
+            background: var(--apple-blue);
+            border-bottom-style: solid;
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
+
+        .trace-tooltip {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            max-width: 320px;
+            font-size: 0.78rem;
+            color: var(--text-primary);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            backdrop-filter: blur(25px);
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .trace-tooltip.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tooltip-header {
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.4rem;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            padding-bottom: 0.25rem;
+            font-size: 0.82rem;
+        }
+
+        .tooltip-snippet {
+            font-style: italic;
+            color: #515154;
+            margin-bottom: 0.40rem;
+            background: #f5f5f7;
+            padding: 0.4rem;
+            border-radius: 4px;
+        }
+
+        .tooltip-source {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header 导航与版头 -->
+    <header>
+        <div class="logo-container">
+            <div class="logo-badge">HARNESSFLOW</div>
+            <div class="logo-title">LLM API 全球 8 大厂商并行分析控制大盘 (2026极速版)</div>
+        </div>
+        <div class="status-badge-container">
+            <div class="dot-indicator"></div>
+            <span>并发多 Agent 图引擎就绪 (FastAPI: localhost:8000)</span>
+        </div>
+    </header>
+
+    <!-- 核心布局大盘 -->
+    <main>
+        
+        <!-- 第一行: 配置面板 + 可视化DAG流程图 (左侧) + Trace终端控制台 (右侧) -->
+        <div class="row">
+            
+            <div class="col-left">
+                <!-- 配置面板 -->
+                <div class="glass-card">
+                    <div class="panel-title">
+                        <span>⚙️ 监控竞品与工作流配置 (2026 全球 8 大旗舰厂商)</span>
+                    </div>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem;">
+                        勾选需要同步探测对比的目标大语言模型 API 服务商。系统采用 Scatter-Gather 多线程池技术拉起各个子线程管道并行采集、隐私合规脱敏及强契约校验。
+                    </p>
+                    <div class="config-columns" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; margin-top: 0.5rem;">
+                        <!-- 国外代表厂商列 -->
+                        <div>
+                            <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.35rem;">
+                                <span>🌐 国外前沿顶奢厂商 (International)</span>
+                            </h4>
+                            <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+                                <label class="competitor-checkbox checked">
+                                    <input type="checkbox" value="OpenAI" checked onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">OpenAI (gpt-5.5-instant)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="Anthropic" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">Anthropic (claude-opus-4.7)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="Google" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">Google (gemini-3.5-flash)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="Mistral" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">Mistral AI (mistral-large-3)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="xAI" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">xAI (Grok-4.3)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="Meta" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">Meta (Llama-4-Maverick)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="Cohere" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">Cohere (Command-R-Plus-2)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="Amazon Bedrock" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">Amazon Bedrock (Nova-Premier-v2)</span>
+                                </label>
+                            </div>
+                        </div>
+                        <!-- 国内代表厂商列 -->
+                        <div>
+                            <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.35rem;">
+                                <span>🇨🇳 国内代表旗舰厂商 (Domestic)</span>
+                            </h4>
+                            <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+                                <label class="competitor-checkbox checked">
+                                    <input type="checkbox" value="火山引擎" checked onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">火山引擎 (Doubao-Seed-2.0)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="深度求索" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">深度求索 (DeepSeek-V4-Pro)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="智谱AI" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">智谱AI (GLM-5.1)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="阿里通义千问" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">阿里通义千问 (Qwen3.7-Max)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="百度文心" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">百度文心 (ERNIE-4.5-Turbo)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="月之暗面" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">月之暗面 (Kimi-K2.6)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="零一万物" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">零一万物 (Yi-Lightning-2)</span>
+                                </label>
+                                <label class="competitor-checkbox">
+                                    <input type="checkbox" value="商汤科技" onchange="toggleCheckbox(this)">
+                                    <div class="checkbox-custom"></div>
+                                    <span style="font-weight: 500;">商汤科技 (SenseChat-Turbo-5)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="action-btn" id="start-btn" onclick="startAnalysis()">
+                        <span>⚡ 启动多线程并发协同分析</span>
+                    </button>
+                </div>
+
+                <!-- ⚡ 实时并发任务状态监控网格 (Parallel Task Monitor) -->
+                <div class="glass-card parallel-monitor-card" id="parallel-monitor-card" style="display: none;">
+                    <div class="panel-title">
+                        <span>⚡ 实时并发任务状态监控网格 (Parallel Task Monitor)</span>
+                    </div>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem;">
+                        多线程并发 Scatter-Gather 调度中。已勾选的各个厂商正处于独立的子线程管道中，以下是它们的实时协同阶段：
+                    </p>
+                    <div id="parallel-grid-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem;">
+                        <!-- 并行卡片将通过 JS 动态注入 -->
+                    </div>
+                </div>
+
+                <!-- DAG 协同图可视化 -->
+                <div class="glass-card">
+                    <div class="panel-title">
+                        <span>🕸️ 主进程流程拓扑图 (HarnessFlow Main DAG)</span>
+                    </div>
+                    <div class="dag-container">
+                        <svg class="dag-view" viewBox="0 0 800 220">
+                            <defs>
+                                <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#d2d2d7" />
+                                </marker>
+                                <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#0071e3" />
+                                </marker>
+                                <marker id="arrow-reject" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#ff453a" />
+                                </marker>
+                            </defs>
+
+                            <!-- 连接线 (Edges) -->
+                            <path id="edge-1" class="edge-path" d="M 135 100 L 185 100" marker-end="url(#arrow)" />
+                            <path id="edge-2" class="edge-path" d="M 275 100 L 325 100" marker-end="url(#arrow)" />
+                            <path id="edge-3" class="edge-path" d="M 415 100 L 465 100" marker-end="url(#arrow)" />
+                            <path id="edge-4" class="edge-path" d="M 555 100 L 605 100" marker-end="url(#arrow)" />
+                            
+                            <!-- QC -> Analyzer 折返拦截流转路径 -->
+                            <path id="edge-reject" class="edge-path" d="M 510 120 C 470 180 390 180 350 120" marker-end="url(#arrow-reject)" style="display: none;" />
+
+                            <!-- 节点 A: Collector (采集) -->
+                            <g id="node-collector" class="agent-node node-collector">
+                                <rect class="node-rect" x="45" y="70" width="90" height="60" />
+                                <text class="node-label" x="90" y="93">Collector</text>
+                                <text class="node-desc" x="90" y="113">信息采集 Agent</text>
+                            </g>
+
+                            <!-- 节点 B: Sanitizer (脱敏) -->
+                            <g id="node-sanitizer" class="agent-node node-sanitizer">
+                                <rect class="node-rect" x="185" y="70" width="90" height="60" />
+                                <text class="node-label" x="230" y="93">Sanitizer</text>
+                                <text class="node-desc" x="230" y="113">隐私脱敏 Agent</text>
+                            </g>
+
+                            <!-- 节点 C: Analyzer (分析) -->
+                            <g id="node-analyzer" class="agent-node node-analyzer">
+                                <rect class="node-rect" x="325" y="70" width="90" height="60" />
+                                <text class="node-label" x="370" y="93">Analyzer</text>
+                                <text class="node-desc" x="370" y="113">字段抽取 Agent</text>
+                            </g>
+
+                            <!-- 节点 D: QC / Validator (质检) -->
+                            <g id="node-qc" class="agent-node node-qc">
+                                <rect class="node-rect" x="465" y="70" width="90" height="60" />
+                                <text class="node-label" x="510" y="93">QC Agent</text>
+                                <text class="node-desc" x="510" y="113">Schema 门禁</text>
+                            </g>
+
+                            <!-- 节点 E: Writer (报告撰写) -->
+                            <g id="node-writer" class="agent-node node-writer">
+                                <rect class="node-rect" x="605" y="70" width="90" height="60" />
+                                <text class="node-label" x="650" y="93">Writer</text>
+                                <text class="node-desc" x="650" y="113">报告生成 Agent</text>
+                            </g>
+                        </svg>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 右侧: Trace 可观测性日志终端 -->
+            <div class="col-right">
+                <div class="glass-card console-container">
+                    <div class="console-header">
+                        <div class="console-dots">
+                            <div class="c-dot c-dot-red"></div>
+                            <div class="c-dot c-dot-yellow"></div>
+                            <div class="c-dot c-dot-green"></div>
+                        </div>
+                        <span>可观测性多线程并发终端 (HarnessFlow-ParallelInspector)</span>
+                    </div>
+                    <div class="console-body" id="console-logs">
+                        <div class="log-entry">
+                            <span class="log-time">[22:00:00]</span>
+                            <span class="log-tag system">SYSTEM</span>
+                            <span class="log-text">控制大盘就绪，等待拉起多 Agent 并发分析流。</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 成果展示区: 最终竞品分析报告 -->
+        <div class="row">
+            <section class="glass-card report-section">
+                <div class="panel-title">
+                    <span>📊 最终交付成果: 竞品对比大盘 & 溯源审计报告</span>
+                </div>
+                <div class="report-content" id="report-box">
+                    <div class="empty-placeholder">
+                        <p>暂无分析数据。勾选竞品并点击“启动分析”，数据流经过并行脱敏、多路强类型校验过审后，将在此渲染三大可视化苹果 HIG 风格报表。</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+    </main>
+
+    <!-- 溯源审计 Tooltip 气泡浮窗 -->
+    <div class="trace-tooltip" id="trace-tooltip"></div>
+
+    <script>
+        let reportArchive = {};
+
+        // 按钮交互改变状态样式
+        function toggleCheckbox(el) {
+            if (el.checked) {
+                el.parentElement.classList.add('checked');
+            } else {
+                el.parentElement.classList.remove('checked');
+            }
+        }
+
+        // 向控制台输出日志
+        function logToConsole(tag, text, isError = false) {
+            const consoleBody = document.getElementById('console-logs');
+            const now = new Date();
+            const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+            
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            let tagClass = 'system';
+            if (tag.toLowerCase().includes('collector')) tagClass = 'collector';
+            else if (tag.toLowerCase().includes('sanitizer')) tagClass = 'sanitizer';
+            else if (tag.toLowerCase().includes('analyzer')) tagClass = 'analyzer';
+            else if (tag.toLowerCase().includes('qc-ok')) tagClass = 'qc-ok';
+            else if (tag.toLowerCase().includes('qc')) tagClass = 'qc';
+            else if (tag.toLowerCase().includes('writer')) tagClass = 'writer';
+            
+            entry.innerHTML = `
+                <span class="log-time">[${timeStr}]</span>
+                <span class="log-tag ${tagClass}">${tag}</span>
+                <span class="log-text" style="${isError ? 'color: var(--color-qc); font-weight: 500;' : ''}">${text}</span>
+            `;
+            
+            consoleBody.appendChild(entry);
+            consoleBody.scrollTop = consoleBody.scrollHeight;
+        }
+
+        // 清空主 DAG 流程节点的所有状态
+        function resetDAGNodes() {
+            const nodes = ['node-collector', 'node-sanitizer', 'node-analyzer', 'node-qc', 'node-writer'];
+            nodes.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.className = `agent-node ${id.replace('node-', 'node-')}`;
+            });
+            // 隐藏折返线与高亮边
+            document.getElementById('edge-reject').style.display = 'none';
+            for (let i = 1; i <= 4; i++) {
+                document.getElementById(`edge-${i}`).className = 'edge-path';
+            }
+        }
+
+        // 设置主 DAG 节点状态样式
+        function setNodeStatus(nodeId, status) {
+            const el = document.getElementById(`node-${nodeId}`);
+            if (el) {
+                el.classList.remove('active', 'completed', 'failed');
+                if (status) {
+                    el.classList.add(status);
+                }
+            }
+        }
+
+        // 设置主 DAG 边管道状态
+        function setEdgeActive(edgeIndex, isActive) {
+            const el = document.getElementById(`edge-${edgeIndex}`);
+            if (el) {
+                if (isActive) el.classList.add('active');
+                else el.classList.remove('active');
+            }
+        }
+
+        // ==========================================
+        // ⚡ 实时并发监控网格 UI 渲染方法
+        // ==========================================
+        function initParallelMonitorGrid(competitorList) {
+            const monitorCard = document.getElementById('parallel-monitor-card');
+            const gridContainer = document.getElementById('parallel-grid-container');
+            
+            gridContainer.innerHTML = '';
+            monitorCard.style.display = 'block';
+            
+            const modelMap = {
+                "OpenAI": "gpt-5.5-instant",
+                "Anthropic": "claude-opus-4.7",
+                "Google": "gemini-3.5-flash",
+                "Mistral": "mistral-large-3",
+                "火山引擎": "Doubao-Seed-2.0",
+                "深度求索": "DeepSeek-V4-Pro",
+                "智谱AI": "GLM-5.1",
+                "阿里通义千问": "Qwen3.7-Max"
+            };
+
+            competitorList.forEach(comp => {
+                const modelName = modelMap[comp] || "2026旗舰";
+                const row = document.createElement('div');
+                row.className = 'monitor-row';
+                row.id = `parallel-row-${comp}`;
+                row.innerHTML = `
+                    <div class="monitor-meta">
+                        <span class="monitor-name">🔍 ${comp}</span>
+                        <span class="monitor-model">${modelName}</span>
+                    </div>
+                    <div class="monitor-steps">
+                        <span class="m-dot" id="m-dot-${comp}-collector"></span>
+                        <span class="m-step-text" id="m-text-${comp}-collector">Collector</span>
+                        <span style="color:#d2d2d7; font-size: 0.65rem;">➔</span>
+                        
+                        <span class="m-dot" id="m-dot-${comp}-sanitizer"></span>
+                        <span class="m-step-text" id="m-text-${comp}-sanitizer">Sanitizer</span>
+                        <span style="color:#d2d2d7; font-size: 0.65rem;">➔</span>
+                        
+                        <span class="m-dot" id="m-dot-${comp}-analyzer"></span>
+                        <span class="m-step-text" id="m-text-${comp}-analyzer">Analyzer</span>
+                        <span style="color:#d2d2d7; font-size: 0.65rem;">➔</span>
+                        
+                        <span class="m-dot" id="m-dot-${comp}-qc"></span>
+                        <span class="m-step-text" id="m-text-${comp}-qc">QC</span>
+                    </div>
+                `;
+                gridContainer.appendChild(row);
+            });
+        }
+
+        function updateParallelStep(competitor, step, status) {
+            const dotEl = document.getElementById(`m-dot-${competitor}-${step}`);
+            const textEl = document.getElementById(`m-text-${competitor}-${step}`);
+            if (!dotEl || !textEl) return;
+
+            dotEl.className = 'm-dot';
+            textEl.className = 'm-step-text';
+
+            if (status === 'active') {
+                dotEl.classList.add('active');
+                textEl.classList.add('active');
+            } else if (status === 'completed') {
+                dotEl.classList.add('completed');
+                textEl.classList.add('completed');
+            } else if (status === 'failed') {
+                dotEl.classList.add('failed');
+                textEl.classList.add('failed');
+            }
+        }
+
+        // 启动竞品分析大盘任务
+        function startAnalysis() {
+            const startBtn = document.getElementById('start-btn');
+            const checkboxes = document.querySelectorAll('.config-columns input:checked');
+            const competitors = Array.from(checkboxes).map(cb => cb.value);
+
+            if (competitors.length === 0) {
+                alert("请至少勾选一个目标竞品！");
+                return;
+            }
+
+            startBtn.disabled = true;
+            resetDAGNodes();
+            initParallelMonitorGrid(competitors);
+            reportArchive = {};
+            document.getElementById('report-box').innerHTML = `
+                <div class="empty-placeholder">
+                    <p style="color: var(--apple-blue);">⚡ 并发多 Agent 级联引擎启动，正在建立并行线程池订阅流...</p>
+                </div>
+            `;
+
+            logToConsole('SYSTEM', `多线程并发工作流拉起！并发分析目标: [${competitors.join(', ')}]`);
+
+            // 流式连接 SSE
+            fetch('http://localhost:8000/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ competitors })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP 异常: ${response.status}`);
+                }
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+
+                function readStream() {
+                    return reader.read().then(({ done, value }) => {
+                        if (done) {
+                            logToConsole('SYSTEM', '多线程并发数据流接收完毕，HarnessFlow 竞品对比归档归档。');
+                            startBtn.disabled = false;
+                            return;
+                        }
+                        
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n\n');
+                        buffer = lines.pop();
+
+                        lines.forEach(line => {
+                            if (line.trim().startsWith('data:')) {
+                                try {
+                                    const eventData = JSON.parse(line.replace('data:', '').trim());
+                                    processWorkflowEvent(eventData);
+                                } catch (e) {
+                                    console.error("解析并发事件失败: ", e);
+                                }
+                            }
+                        });
+
+                        return readStream();
+                    });
+                }
+                return readStream();
+            })
+            .catch(err => {
+                logToConsole('SYSTEM', `连接后端服务失败: ${err.message}。请核准 Docker/FastAPI 后端是否已拉起！`, true);
+                document.getElementById('report-box').innerHTML = `
+                    <div class="empty-placeholder" style="color: var(--color-qc);">
+                        <p>🛑 联调中断: 无法连接至 FastAPI 服务端 (localhost:8000)。请核准 Docker/FastAPI 后端是否已拉起！</p>
+                    </div>
+                `;
+                startBtn.disabled = false;
+            });
+        }
+
+        // 处理流式工作流派发出来的状态事件
+        function processWorkflowEvent(data) {
+            const ev = data.event;
+            const node = data.node;
+            const competitor = data.competitor;
+            const state = data.state;
+
+            if (ev === 'workflow_start') {
+                logToConsole('SYSTEM', `[HarnessFlow] 级联工作流拓扑并发线程池拉起。`);
+                setNodeStatus('collector', 'active');
+            } 
+            else if (ev === 'node_start') {
+                // 1. 更新主 DAG 的高亮与高亮边
+                resetNodeEdgeHighlights(node);
+                setNodeStatus(node, 'active');
+                
+                // 2. 更新并发网格状态
+                if (competitor && competitor !== 'ALL') {
+                    updateParallelStep(competitor, node, 'active');
+                }
+                
+                if (node === 'collector') {
+                    logToConsole(`[${competitor}][Collector]`, `向仿真 Mock 服务器拉取网页原始语料。`);
+                } else if (node === 'sanitizer') {
+                    logToConsole(`[${competitor}][Sanitizer]`, `完成敏感手机电话与泄露 API Key 的脱敏过滤。`);
+                } else if (node === 'analyzer') {
+                    const retries = state.retry_count || 0;
+                    if (retries > 0) {
+                        logToConsole(`[${competitor}][Analyzer]`, `🛑 [QC 拦截重抽] 发现必填字段缺失，进行第 ${retries} 次深入上下文重抽...`, true);
+                    } else {
+                        logToConsole(`[${competitor}][Analyzer]`, `智能抽取定价、并发、口碑及 CodingPlan 强契约字段。`);
+                    }
+                } else if (node === 'qc') {
+                    logToConsole(`[${competitor}][QC]`, `校验 Pydantic 数据契约，拦截大模型幻觉。`);
+                } else if (node === 'writer') {
+                    logToConsole('SYSTEM', `[Writer] 正在整合全部 8 大厂商已过审的竞品档案，撰写三大对比大盘。`);
+                }
+            } 
+            else if (ev === 'node_end') {
+                if (competitor && competitor !== 'ALL') {
+                    const status = (state.validation_verdict === false && node === 'qc') ? 'failed' : 'completed';
+                    updateParallelStep(competitor, node, status);
+                }
+
+                if (state.validation_verdict === false && node === 'qc') {
+                    setNodeStatus('qc', 'failed');
+                    setNodeStatus('analyzer', 'failed');
+                    
+                    if (competitor && competitor !== 'ALL') {
+                        updateParallelStep(competitor, 'analyzer', 'failed');
+                    }
+
+                    const rejectLine = document.getElementById('edge-reject');
+                    rejectLine.style.display = 'block';
+                    rejectLine.className = 'edge-path qc-reject';
+                    
+                    // 广播拦截红横幅至可观测终端
+                    const consoleBody = document.getElementById('console-logs');
+                    const banner = document.createElement('div');
+                    banner.className = 'qc-alert-banner';
+                    banner.innerHTML = `
+                        <strong>🛑 [QC 强契约拦截打回]</strong> [${competitor}] 数据未通过 Pydantic 核验！<br>
+                        <strong>异常反馈：</strong>${state.feedback || "必填字段缺失"}
+                    `;
+                    consoleBody.appendChild(banner);
+                    consoleBody.scrollTop = consoleBody.scrollHeight;
+                    
+                    logToConsole(`[${competitor}][QC]`, `检测到属性结构异常，拦截打回！`, true);
+                } else {
+                    setNodeStatus(node, 'completed');
+                    if (node === 'qc') {
+                        logToConsole(`[${competitor}][QC-OK]`, `通过强校验，数据完美完整，成功锚定 SourceTrace。`);
+                        document.getElementById('edge-reject').style.display = 'none';
+                    }
+                }
+            } 
+            else if (ev === 'workflow_complete') {
+                resetDAGNodes();
+                ['collector', 'sanitizer', 'analyzer', 'qc', 'writer'].forEach(n => setNodeStatus(n, 'completed'));
+                
+                // 并发网格所有行标绿
+                const gridRows = document.querySelectorAll('.monitor-row');
+                gridRows.forEach(row => {
+                    const compName = row.id.replace('parallel-row-', '');
+                    ['collector', 'sanitizer', 'analyzer', 'qc'].forEach(s => {
+                        updateParallelStep(compName, s, 'completed');
+                    });
+                });
+
+                logToConsole('SYSTEM', '🎉 并发线程池 Scatter-Gather 级联全部平稳收工！生成最终成果。');
+                reportArchive = state.reports_archive || {};
+                renderMarkdownReport(state.final_markdown_report);
+            }
+            else if (ev === 'workflow_error') {
+                logToConsole('SYSTEM', `并发流运行失败: ${data.message}`, true);
+                resetDAGNodes();
+                document.getElementById('report-box').innerHTML = `
+                    <div class="empty-placeholder" style="color: var(--color-qc);">
+                        <p>🛑 分析异常中止: ${data.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function resetNodeEdgeHighlights(activeNode) {
+            for (let i = 1; i <= 4; i++) {
+                document.getElementById(`edge-${i}`).className = 'edge-path';
+            }
+            document.getElementById('edge-reject').style.display = 'none';
+
+            if (activeNode === 'sanitizer') setEdgeActive(1, true);
+            else if (activeNode === 'analyzer') setEdgeActive(2, true);
+            else if (activeNode === 'qc') setEdgeActive(3, true);
+            else if (activeNode === 'writer') {
+                setEdgeActive(1, true);
+                setEdgeActive(2, true);
+                setEdgeActive(3, true);
+                setEdgeActive(4, true);
+            }
+        }
+
+        // 高精 Markdown 报告解析与 Badge 徽章修饰
+        function renderMarkdownReport(mdText) {
+            if (!mdText) return;
+
+            let html = mdText;
+
+            // 基础标签正则
+            html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+            html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^\>\s*(.+)$/gm, '<blockquote>$1</blockquote>');
+            html = html.replace(/^\-\s*(.+)$/gm, '<li>$1</li>');
+            html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+
+            // 精准表格解析
+            const tableRegex = /\|(.+)\|[\r\n]+\|([-:\s|]+)\|[\r\n]+((?:\|.+[\r\n]+)+)/g;
+            html = html.replace(tableRegex, function(match, headerLine, alignLine, rowsText) {
+                const headers = headerLine.split('|').map(x => x.trim()).filter(x => x !== '');
+                const rows = rowsText.trim().split('\n').map(row => {
+                    return row.split('|').map(x => x.trim()).filter(x => x !== '');
+                }).filter(r => r.length > 0);
+
+                let tableHtml = '<table><thead><tr>';
+                headers.forEach(h => {
+                    tableHtml += `<th>${h}</th>`;
+                });
+                tableHtml += '</tr></thead><tbody>';
+
+                rows.forEach(r => {
+                    tableHtml += '<tr>';
+                    r.forEach(td => {
+                        // 细化修饰单元格内的标志和徽章
+                        let tdStyled = td;
+                        
+                        // 1. 满意度星级 ⭐ 高亮
+                        if (td.startsWith('⭐')) {
+                            tdStyled = `<span style="background: rgba(245,166,35,0.06); border: 1px solid rgba(245,166,35,0.2); color: #b06000; padding: 3px 8px; border-radius: 20px; font-weight: 700; font-size: 0.8rem;">${td}</span>`;
+                        }
+                        
+                        // 2. 优势 strengths 淡绿 Badge 徽章化
+                        if (td.includes('优势') || (headers.some(h => h.includes('优势')) && !td.startsWith('⭐'))) {
+                            const items = td.split('、');
+                            tdStyled = items.map(i => `<span style="background: rgba(52,199,89,0.06); border: 1px solid rgba(52,199,89,0.18); color: #137333; padding: 2px 6px; border-radius: 6px; font-size: 0.76rem; font-weight: 500; margin-right: 4px; display: inline-block; margin-bottom: 2px;">${i}</span>`).join('');
+                        }
+                        
+                        // 3. 痛点 pain points 橙红/红色 Badge 徽章化
+                        if (td.includes('吐槽') || (headers.some(h => h.includes('痛点')) && !td.startsWith('⭐'))) {
+                            const items = td.split('、');
+                            tdStyled = items.map(i => `<span style="background: rgba(255,69,58,0.05); border: 1px solid rgba(255,69,58,0.18); color: #d71919; padding: 2px 6px; border-radius: 6px; font-size: 0.76rem; font-weight: 500; margin-right: 4px; display: inline-block; margin-bottom: 2px;">${i}</span>`).join('');
+                        }
+
+                        // 4. 优化语言列表 code block 化
+                        if (td.startsWith('`') && td.endsWith('`')) {
+                            const langs = td.replace(/`/g, '').split(', ');
+                            tdStyled = langs.map(l => `<code style="background: rgba(0, 113, 227, 0.04); color: var(--apple-blue); border: 1px solid rgba(0,113,227,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-right: 3px; font-family: monospace;">${l}</code>`).join('');
+                        }
+
+                        tableHtml += `<td>${tdStyled}</td>`;
+                    });
+                    tableHtml += '</tr>';
+                });
+                tableHtml += '</tbody></table>';
+                return tableHtml;
+            });
+
+            // 证据源 Trace 溯源高亮关联
+            const traceRegex = /字段\s*`([^`]+)`\s*证据定位：[\r\n\s]+&gt;\s*“\*([^*]+)\*”[\r\n\s]+&gt;\s*📄\s*网页数据来源:\s*\[([^\]]+)\]\(([^)]+)\)/g;
+            html = html.replace(traceRegex, function(match, fieldPath, snippet, urlText, urlLink) {
+                let competitorName = "2026旗舰";
+                if (urlLink.includes('openai')) competitorName = "OpenAI";
+                else if (urlLink.includes('doubao')) competitorName = "火山引擎";
+                else if (urlLink.includes('claude')) competitorName = "Anthropic";
+                else if (urlLink.includes('deepseek')) competitorName = "深度求索";
+                else if (urlLink.includes('google')) competitorName = "Google";
+                else if (urlLink.includes('mistral')) competitorName = "Mistral AI";
+                else if (urlLink.includes('zhipu')) competitorName = "智谱AI";
+                else if (urlLink.includes('qwen')) competitorName = "阿里通义千问";
+                else if (urlLink.includes('xai') || urlLink.includes('grok')) competitorName = "xAI";
+                else if (urlLink.includes('meta') || urlLink.includes('llama')) competitorName = "Meta";
+                else if (urlLink.includes('cohere')) competitorName = "Cohere";
+                else if (urlLink.includes('bedrock') || urlLink.includes('amazon')) competitorName = "Amazon Bedrock";
+                else if (urlLink.includes('baidu') || urlLink.includes('ernie')) competitorName = "百度文心";
+                else if (urlLink.includes('moonshot') || urlLink.includes('kimi')) competitorName = "月之暗面";
+                else if (urlLink.includes('yi')) competitorName = "零一万物";
+                else if (urlLink.includes('sensetime') || urlLink.includes('sensechat')) competitorName = "商汤科技";
+
+                return `
+                    <div style="background: #f5f5f7; border: 1px solid var(--card-border); border-radius: 10px; padding: 0.75rem 1.25rem; margin: 0.75rem 0;">
+                        <span style="font-size: 0.8rem; font-weight: 700; color: var(--apple-blue);">
+                            🎯 [可信数据溯源] ${competitorName} · <code>${fieldPath}</code>
+                        </span>
+                        <div style="font-style: italic; color: var(--text-primary); margin: 0.35rem 0; padding-left: 0.65rem; border-left: 2px solid var(--apple-blue);">
+                            “${snippet}”
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                            📄 证据原网页: <a class="source-trace-link" onclick="showTraceTooltip(event, '${competitorName}', '${fieldPath}', '${snippet}', '${urlLink}')">${urlLink}</a>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // 统一修饰布尔标签与脱敏标签
+            html = html.replace(/✅ 支持/g, '<span style="color: #137333; font-weight: 600;">✅ 支持</span>');
+            html = html.replace(/✅ 支持嵌入/g, '<span style="background: rgba(52,199,89,0.06); color: #137333; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">✅ IDE 支持</span>');
+            html = html.replace(/✅ 提供沙盒/g, '<span style="background: rgba(0,113,227,0.06); color: var(--apple-blue); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🟢 提供 Sandbox</span>');
+            html = html.replace(/❌ 不支持/g, '<span style="color: #c5221f; font-weight: 500; opacity: 0.8;">❌ 不支持</span>');
+            html = html.replace(/❌ 无沙盒/g, '<span style="color: var(--text-secondary); font-size: 0.75rem;">❌ 无沙盒</span>');
+            html = html.replace(/已合规脱敏/g, '<span style="background: rgba(52,199,89,0.08); color: #137333; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🛡️ 已脱敏合规</span>');
+
+            document.getElementById('report-box').innerHTML = html;
+        }
+
+        // Apple HIG 白色极简浮窗 Tooltip 交互
+        function showTraceTooltip(e, competitor, field, snippet, url) {
+            const tooltip = document.getElementById('trace-tooltip');
+            
+            tooltip.innerHTML = `
+                <div class="tooltip-header">🔍 HarnessFlow 审计级数据核查</div>
+                <div style="font-size: 0.75rem; margin-bottom: 0.4rem; color: var(--text-secondary);">
+                    属性路径: <strong style="color: var(--text-primary);">${field}</strong>
+                </div>
+                <div class="tooltip-snippet">“${snippet}”</div>
+                <div class="tooltip-source">
+                    📄 原始页面: <a href="${url}" target="_blank" style="color: var(--apple-blue); text-decoration: none;">${url}</a>
+                </div>
+                <div style="font-size: 0.7rem; color: #137333; margin-top: 0.4rem; font-weight:500;">
+                    ✓ 强类型校验合规 · 证据跟踪无黑盒幻觉
+                </div>
+            `;
+
+            const rect = e.target.getBoundingClientRect();
+            tooltip.style.left = `${rect.left + window.scrollX - 10}px`;
+            tooltip.style.top = `${rect.bottom + window.scrollY + 8}px`;
+            
+            tooltip.classList.add('visible');
+
+            e.stopPropagation();
+            document.onclick = function() {
+                tooltip.classList.remove('visible');
+                document.onclick = null;
+            };
+        }
+    </script>
+</body>
+</html>

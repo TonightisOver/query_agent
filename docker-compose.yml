@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DOUBAO_API_KEY=${DOUBAO_API_KEY}
+      - DOUBAO_ENDPOINT=${DOUBAO_ENDPOINT}
+      - DOUBAO_MODEL=${DOUBAO_MODEL}
+      - MOCK_SERVER_URL=http://mock-server:8080
+      - ENVIRONMENT=production
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - mock-server
+    networks:
+      - intelligence-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    depends_on:
+      - backend
+    networks:
+      - intelligence-net
+
+  mock-server:
+    build:
+      context: ./mock_server
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./mock_server:/app
+    networks:
+      - intelligence-net
+
+networks:
+  intelligence-net:
+    driver: bridge
