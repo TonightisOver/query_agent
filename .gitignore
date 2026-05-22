@@ -27,3 +27,6 @@ Thumbs.db
 # Logs and archives
 *.log
 backend/reports_archive/
+backend/data/
+.harness/
+scratch/

@@ -21,7 +21,7 @@ OPENAI_HTML = """
             <li><strong>Input Token Price:</strong> $1.10 per 1M tokens</li>
             <li><strong>Output Token Price:</strong> $4.40 per 1M tokens</li>
             <li><strong>Context Window:</strong> 200000 tokens</li>
-            <li><strong>Features:</strong> High-speed reasoning, Multi-step agentic planning, Voice & Vision support.</li>
+            <li><strong>Features:</strong> Extreme response speed, cost-effective routing, complete tool calling.</li>
         </ul>
     </div>
  
@@ -34,15 +34,15 @@ OPENAI_HTML = """
  
     <h2>Developer Eco Feedback & Sentiment</h2>
     <p>According to our latest developer community feedback survey, the overall satisfaction rating for the OpenAI gpt-5.5-instant model has reached an impressive 4.8 out of 5.
-    Developers rave about its core strengths: [unprecedented ultra-low latency reasoning] and [excellent cost-performance trade-off for complex programming and chat].
-    However, the main user complaints and pain points are: [slight cognitive regression compared to full GPT-5.5 flagship on edge cases] and [heavy prompt token consumption during long-term agentic executions].</p>
+    Developers rave about its core strengths: [ultra-fast zero-latency response times] and [extreme cost-efficiency balancing logic].
+    However, the main user complaints and pain points are: [minor reasoning limits on long-context fringe queries] and [high token caching usage].</p>
  
     <h2>Coding Plan & Developer Support</h2>
     <p>We are excited to launch the OpenAI Coding-Plan for 2026. This plan features:
     - <strong>IDE Integration:</strong> [Yes, fully supported in Cursor, VS Code, and major editors].
     - <strong>Language Optimizations:</strong> [Specifically optimized for Python, C++, and TypeScript].
     - <strong>Developer Sandbox:</strong> [Yes, provided as a free sandbox environment for enterprise APIs].
-    - <strong>Summary Description:</strong> [We provide professional API test sandbox for verified developers on our enterprise coding tier].</p>
+    - <strong>Summary Description:</strong> [TokenPlan: 并发缓存（Prompt Cache）享 50% 阶梯折扣；CodingPlan: 提供专业版及企业级订阅 API 专属测试沙盒].</p>
  
     <h2>Developer Admin Contact & Security Note</h2>
     <!-- 故意包含敏感测试信息，用于安全和脱敏 Agent 识别过滤 -->
@@ -124,15 +124,15 @@ GOOGLE_HTML = """
 
     <h2>Developer Reviews</h2>
     <p>Google Gemini 3.5 Flash overall satisfaction rating: 4.65 out of 5.
-    Strengths: [extremely high token processing speed and low latency] and [top-tier multi-step agentic execution and tool calling].
-    Pain points: [occasional over-safety filtering that blocks valid responses].</p>
+    Strengths: [industry-leading throughput and extremely fast response speed] and [excellent reasoning with complex tool calling decisions].
+    Pain points: [occasional safety-guard over-blocking and slight semantic drift on edge terms].</p>
 
     <h2>Coding Plan</h2>
     <p>Google AI Studio Coding Plan:
     - <strong>IDE Support:</strong> [Yes, integrated with Cursor, IDX, and VS Code].
     - <strong>Optimized Languages:</strong> [Specially optimized for Python, Kotlin, and Go].
     - <strong>Free Sandbox:</strong> [Yes, provided for testing].
-    - <strong>Description:</strong> [Google AI Studio provides a free daily request sandbox for registered developers to test API integration].</p>
+    - <strong>Description:</strong> [TokenPlan: 谷歌 AI Studio 为注册开发者提供极具诱惑的每日百万 Token 免费额度；CodingPlan: 深度集成本地 IDX 编辑器与 VS Code 插件支持].</p>
 
     <h2>Security MASK</h2>
     <p>Admin: +86-13911112222. Secret token is sk-proj-gemini8888888888888888888.</p>
