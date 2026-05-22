@@ -61,3 +61,45 @@ class CompetitorIntelligence(BaseModel):
     # 合规脱敏状态标记
     is_sanitized: bool = Field(default=False, description="数据是否已通过脱敏过滤")
     sanitized_fields: List[str] = Field(default_factory=list, description="被脱敏过滤的敏感字段或文本片段")
+
+# ==========================================
+# Phase 1-4 新增数据模型契约
+# ==========================================
+
+class SmartAnalyzeRequest(BaseModel):
+    query: str = Field(..., description="智能分析自然语言输入")
+
+class BudgetRange(BaseModel):
+    max_price_per_million: Optional[float] = Field(None, description="最大可接受的每百万 Token 价格")
+    currency: str = Field("CNY", description="计价货币，如 USD, CNY")
+
+class PerformanceRequirements(BaseModel):
+    context_window_min: int = Field(0, description="最小需要的上下文 Token 长度")
+    latency_priority: str = Field("medium", description="延迟优化优先级 (high|medium|low)")
+    throughput_priority: str = Field("medium", description="吞吐量优先级 (high|medium|low)")
+
+class FeatureRequirements(BaseModel):
+    function_calling: Optional[bool] = Field(None, description="是否必须支持函数调用")
+    vision_support: Optional[bool] = Field(None, description="是否必须支持视觉多模态")
+
+class ParsedRequirement(BaseModel):
+    scenario: str = Field("general", description="提取的目标业务场景")
+    budget_range: BudgetRange
+    language_preference: List[str] = Field(default_factory=lambda: ["中文"], description="语言偏好列表")
+    performance_requirements: PerformanceRequirements
+    feature_requirements: FeatureRequirements
+    keywords: List[str] = Field(default_factory=list, description="关键字列表")
+    raw_query: str = Field("", description="原始查询文本")
+
+class VendorRecommendation(BaseModel):
+    vendor_name: str = Field(..., description="厂商名称")
+    match_score: float = Field(..., description="需求匹配得分")
+    match_reasons: List[str] = Field(default_factory=list, description="匹配推荐原因亮点")
+    auto_selected: bool = Field(False, description="是否被系统自动勾选推荐")
+
+class FeedbackRequest(BaseModel):
+    report_id: str = Field(..., description="评估报告的 ID")
+    rating: int = Field(..., description="反馈星级评分 1-5")
+    comments: str = Field("", description="具体改进评论建议")
+    vendor_list: Optional[List[str]] = Field(None, description="分析的厂商列表")
+

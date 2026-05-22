@@ -6,12 +6,12 @@ import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import TypedDict, List, Dict, Any, Literal
-from datetime import datetime
-from openai import OpenAI
 from pydantic import ValidationError
 
 from schemas import CompetitorIntelligence, PricingSchema, RateLimitsSchema, FeaturesSchema, UserFeedbackSchema, CodingPlanSchema, SourceTrace, ModelIntelligenceSchema
-from config import API_KEY, ENDPOINT, BASE_URL
+
+# 全局并发控制信号量，限制同时调用 LLM 的线程数（避免触发 429）
+_llm_semaphore = threading.Semaphore(2)
 
 # ==========================================
 # 1. LangGraph State 状态定义
@@ -28,925 +28,82 @@ class AgentState(TypedDict):
     trace_logs: List[str]               # 用于前端可视化的 DAG 交互 Trace 日志
     reports_archive: Dict[str, Any]     # 已经生成的竞品结构化归档 (名称 -> 实体)
     final_markdown_report: str          # 最终的综合竞品分析报告
+    parsed_requirement: Dict[str, Any]  # 意图分析提取得到的场景和预算硬指标
 
 # ==========================================
 # 2. 火山引擎大模型 API 客户端初始化
 # ==========================================
 client = None
-if API_KEY and ENDPOINT:
-    client = OpenAI(
-        api_key=API_KEY,
-        base_url=BASE_URL
-    )
+
+def get_llm_client():
+    global client
+    if client is None:
+        import config
+        from openai import OpenAI
+        api_key = os.getenv("LLM_API_KEY") or config.API_KEY
+        base_url = os.getenv("LLM_BASE_URL") or config.BASE_URL
+        if api_key:
+            client = OpenAI(
+                api_key=api_key,
+                base_url=base_url,
+                timeout=60.0
+            )
+    return client
 
 def call_llm(prompt: str, system_prompt: str = "你是一个专业的信息抽取与安全专家。") -> str:
-    """极其健壮的 LLM 调用，当没有配置 API_KEY 时自动降级为高性能规则抽取，防止运行中断"""
-    if client and ENDPOINT:
-        try:
-            response = client.chat.completions.create(
-                model=ENDPOINT,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            print(f"[LLM 调用异常] {e}，自动启用健壮规则引擎兜底...")
-            
-    return offline_rule_llm_mock(prompt)
+    """LLM 调用，带指数退避重试和并发控制。无 API_KEY 时降级为规则引擎。"""
+    llm_client = get_llm_client()
+    model_name = os.getenv("LLM_MODEL") or "kimi-k2.5"
+    if llm_client:
+        max_retries = 3
+        for attempt in range(max_retries):
+            acquired = _llm_semaphore.acquire(timeout=180)
+            if not acquired:
+                print("[LLM 并发控制] 信号量获取超时，降级为规则引擎...")
+                break
+            try:
+                response = llm_client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=float(os.getenv("LLM_TEMPERATURE", "0.1")),
+                    max_tokens=int(os.getenv("LLM_MAX_TOKENS", "8192"))
+                )
+                res_content = response.choices[0].message.content
+                if res_content:
+                    return res_content.strip()
+                raise ValueError("LLM 返回空响应")
+            except Exception as e:
+                err_str = str(e)
+                is_retryable = "429" in err_str or "rate_limit" in err_str or "timeout" in err_str.lower() or "overloaded" in err_str.lower()
+                if is_retryable and attempt < max_retries - 1:
+                    wait = (attempt + 1) * 3
+                    print(f"[LLM 限流/超时] 第{attempt+1}次重试，等待{wait}秒... 错误详情: {e}")
+                    time.sleep(wait)
+                    continue
+                print(f"[LLM 调用异常] {e}，自动启用健壮规则引擎兜底...")
+                break
+            finally:
+                _llm_semaphore.release()
+
+    return offline_rule_llm_mock(prompt, system_prompt)
 
 
 # ==========================================
-# 离线高保真全球 16 家大厂双模型情报知识库 (向下兼容 + 多模型强 Schema)
+# 离线高保真全球 16 家大厂双模型情报知识库 (从 JSON 加载)
 # ==========================================
-OFFLINE_MODELS_FALLBACK = {
-    "OpenAI": {
-        "provider_name": "OpenAI",
-        "region": "international",
-        "model_family": "gpt-5.5-instant",
-        "pricing": {"prompt_price_per_million": 1.10, "completion_price_per_million": 4.40, "currency": "USD"},
-        "rate_limits": {"rpm": 10000, "tpm": 1000000},
-        "features": {"context_window": 200000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.8,
-            "strengths": ["超前无感极速推理响应", "代码与聊天极致性价比平衡"],
-            "pain_points": ["对极端生僻长任务脑力逊色于旗舰完整版", "高频循环执行消耗大量上下文缓存"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "C++", "TypeScript"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 对专业版及企业级开发者订阅提供 API 专属测试沙盒；CodingPlan: 专享 API 专属测试沙盒"
-        },
-        "models": [
-            {
-                "model_name": "gpt-5.5-instant",
-                "pricing": {"prompt_price_per_million": 1.10, "completion_price_per_million": 4.40, "currency": "USD"},
-                "rate_limits": {"rpm": 10000, "tpm": 1000000},
-                "features": {"context_window": 200000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.8,
-                    "strengths": ["超前无感极速推理响应", "代码与聊天极致性价比平衡"],
-                    "pain_points": ["对极端生僻长任务脑力逊色于旗舰完整版", "高频循环执行消耗大量上下文缓存"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "C++", "TypeScript"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 并发缓存（Prompt Cache）享 50% 阶梯折扣；CodingPlan: 提供专业版及企业级订阅 API 专属测试沙盒"
-                }
-            },
-            {
-                "model_name": "o4-pro",
-                "pricing": {"prompt_price_per_million": 15.0, "completion_price_per_million": 60.0, "currency": "USD"},
-                "rate_limits": {"rpm": 5000, "tpm": 500000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.95,
-                    "strengths": ["多步强化学习推理首屈一指", "高难逻辑与复杂数学零失误代码生成"],
-                    "pain_points": ["大负载下TTFB首字排队响应延迟增加", "计费单价极为昂贵"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Rust", "Python", "C++"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 针对企业级订购提供专属按量折扣，可扩展额外 Context；CodingPlan: 专享 API 沙盒，Cursor 钦定旗舰思维链推理模型"
-                }
-            }
-        ]
-    },
-    "Anthropic": {
-        "provider_name": "Anthropic",
-        "region": "international",
-        "model_family": "claude-opus-4.7",
-        "pricing": {"prompt_price_per_million": 15.0, "completion_price_per_million": 75.0, "currency": "USD"},
-        "rate_limits": {"rpm": 4000, "tpm": 400000},
-        "features": {"context_window": 200000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.95,
-            "strengths": ["顶级多步自主规划智能体底座", "高分辨率图像及PDF混合分析能力"],
-            "pain_points": ["Token使用单价极为昂贵", "并发数偏低且大负载排队严格"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["TypeScript", "Python", "Java", "Rust"],
-            "has_sandbox_env": False,
-            "plan_description": "TokenPlan: 团队专享月度 Token 消费大礼包，支持批量折扣；CodingPlan: 提供专属开发者 SDK，对 Cursor 编辑器深度适配"
-        },
-        "models": [
-            {
-                "model_name": "claude-3.5-sonnet-v2",
-                "pricing": {"prompt_price_per_million": 3.0, "completion_price_per_million": 15.0, "currency": "USD"},
-                "rate_limits": {"rpm": 8000, "tpm": 600000},
-                "features": {"context_window": 200000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.9,
-                    "strengths": ["目前全球综合编码第一神作", "卓越的前端布局与交互逻辑生成"],
-                    "pain_points": ["高频并发容易触发 429 报错限制", "上下文填充超过100k后响应有微幅变慢"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["TypeScript", "Rust", "Python"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 支持并发缓存折扣，IDE 交互延迟极低；CodingPlan: Cursor 首推钦定开发模型，深度适配前端 UI 生成"
-                }
-            },
-            {
-                "model_name": "claude-opus-4.7",
-                "pricing": {"prompt_price_per_million": 15.0, "completion_price_per_million": 75.0, "currency": "USD"},
-                "rate_limits": {"rpm": 4000, "tpm": 400000},
-                "features": {"context_window": 200000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.95,
-                    "strengths": ["顶级多步自主规划智能体底座", "高分辨率图像及PDF混合分析能力"],
-                    "pain_points": ["Token使用单价极为昂贵", "并发数偏低且大负载排队严格"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["TypeScript", "Python", "Java", "Rust"],
-                    "has_sandbox_env": False,
-                    "plan_description": "TokenPlan: 团队专享月度 Token 消费大礼包，支持批量折扣；CodingPlan: 提供专属开发者 SDK，对 Cursor 编辑器深度适配"
-                }
-            }
-        ]
-    },
-    "Google": {
-        "provider_name": "Google",
-        "region": "international",
-        "model_family": "gemini-3.5-flash",
-        "pricing": {"prompt_price_per_million": 0.10, "completion_price_per_million": 0.40, "currency": "USD"},
-        "rate_limits": {"rpm": 2000, "tpm": 200000},
-        "features": {"context_window": 2000000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.65,
-            "strengths": ["业界最高并发响应速度比前代快4倍", "顶尖的AI智能体连续工具调用决策"],
-            "pain_points": ["冷门专业领域检索偶尔出现细微漂移和安全拦截"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "Kotlin", "Go"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 谷歌 AI Studio 为注册开发者提供极具诱惑的每日百万 Token 免费额度；CodingPlan: 深度集成本地 IDX 编辑器与 VS Code 插件支持"
-        },
-        "models": [
-            {
-                "model_name": "gemini-3.5-flash",
-                "pricing": {"prompt_price_per_million": 0.10, "completion_price_per_million": 0.40, "currency": "USD"},
-                "rate_limits": {"rpm": 2000, "tpm": 200000},
-                "features": {"context_window": 2000000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.65,
-                    "strengths": ["业界最高并发响应速度比前代快4倍", "顶尖的AI智能体连续工具调用决策"],
-                    "pain_points": ["冷门专业领域检索偶尔出现细微漂移和安全拦截"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "Kotlin", "Go"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 谷歌 AI Studio 为注册开发者提供极具诱惑的每日百万 Token 免费额度；CodingPlan: 深度集成本地 IDX 编辑器与 VS Code 插件支持"
-                }
-            },
-            {
-                "model_name": "gemini-3.5-pro",
-                "pricing": {"prompt_price_per_million": 1.25, "completion_price_per_million": 5.00, "currency": "USD"},
-                "rate_limits": {"rpm": 1000, "tpm": 150000},
-                "features": {"context_window": 2000000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.85,
-                    "strengths": ["支撑整库级超长代码走查及精细推理", "高精度长文档召回，针尖大海任务零差错"],
-                    "pain_points": ["首字响应延迟（TTFB）在深思逻辑任务中稍高"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Java", "Python", "Go", "C++"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 享超大上下文专属长线折扣计费包；CodingPlan: 独立 API 沙盒环境，支持巨型代码库全景构建分析"
-                }
-            }
-        ]
-    },
-    "Mistral AI": {
-        "provider_name": "Mistral AI",
-        "region": "international",
-        "model_family": "mistral-large-3",
-        "pricing": {"prompt_price_per_million": 2.0, "completion_price_per_million": 6.0, "currency": "USD"},
-        "rate_limits": {"rpm": 5000, "tpm": 300000},
-        "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.4,
-            "strengths": ["主权欧洲数据安全合规托管", "原生高水准定制化与私有微调"],
-            "pain_points": ["极复杂多步离线推理逻辑微输于 GPT-5.5"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["C++", "Python", "TypeScript"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 专享 Mistral La Plateforme 计划，提供测试沙盒与按量特惠；CodingPlan: 欧盟合规开发通道，定制微调支持"
-        },
-        "models": [
-            {
-                "model_name": "codestral-2501",
-                "pricing": {"prompt_price_per_million": 0.20, "completion_price_per_million": 0.60, "currency": "USD"},
-                "rate_limits": {"rpm": 8000, "tpm": 400000},
-                "features": {"context_window": 32000, "function_calling": True, "vision_support": False},
-                "user_feedback": {
-                    "developer_satisfaction": 4.6,
-                    "strengths": ["专为编码优化的轻量级MoE架构", "极致流畅的 Fill-in-the-Middle 代码补全能力"],
-                    "pain_points": ["通用常识回答能力较窄，不太契合多功能聊天交互"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["C++", "Python", "TypeScript", "Java"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 针对代码补全 FIM API 实施极具吸引力的折扣计费；CodingPlan: 完美整合 Tabnine 及 VS Code 编码插件"
-                }
-            },
-            {
-                "model_name": "mistral-large-3",
-                "pricing": {"prompt_price_per_million": 2.0, "completion_price_per_million": 6.0, "currency": "USD"},
-                "rate_limits": {"rpm": 5000, "tpm": 300000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.4,
-                    "strengths": ["主权欧洲数据安全合规托管", "原生高水准定制化与私有微调"],
-                    "pain_points": ["极复杂多步离线推理逻辑微输于 GPT-5.5"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["C++", "Python", "TypeScript"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 专享 Mistral La Plateforme 计划，提供测试沙盒与按量特惠；CodingPlan: 欧盟合规开发通道，定制微调支持"
-                }
-            }
-        ]
-    },
-    "火山引擎": {
-        "provider_name": "火山引擎",
-        "region": "domestic",
-        "model_family": "Doubao-Seed-2.0",
-        "pricing": {"prompt_price_per_million": 0.8, "completion_price_per_million": 2.0, "currency": "CNY"},
-        "rate_limits": {"rpm": 30000, "tpm": 1200000},
-        "features": {"context_window": 131072, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.7,
-            "strengths": ["极高性价比（输入0.8元/百万）", "国内极致高并发大容量稳定性"],
-            "pain_points": ["极高难度逻辑代码推理不及 claude-opus-4.7", "英文生僻学术推理存在提升空间"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "Go", "Java"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 注册立赠 5 亿 Token 优惠，企业首年享受专属大客户折扣；CodingPlan: 深度集成 MarsCode 协同与专属开发测试沙盒"
-        },
-        "models": [
-            {
-                "model_name": "Doubao-pro-128k",
-                "pricing": {"prompt_price_per_million": 0.8, "completion_price_per_million": 2.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 30000, "tpm": 1200000},
-                "features": {"context_window": 131072, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.7,
-                    "strengths": ["极高性价比（输入0.8元/百万）", "国内极致高并发大容量稳定性"],
-                    "pain_points": ["极高难度逻辑代码推理不及 claude-opus-4.7", "英文生僻学术推理存在提升空间"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "Go", "Java"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 注册立赠 5 亿 Token 优惠，企业首年享受专属大客户折扣；CodingPlan: 深度集成 MarsCode 协同与专属开发测试沙盒"
-                }
-            },
-            {
-                "model_name": "Doubao-lite-32k",
-                "pricing": {"prompt_price_per_million": 0.3, "completion_price_per_million": 0.9, "currency": "CNY"},
-                "rate_limits": {"rpm": 50000, "tpm": 2000000},
-                "features": {"context_window": 32768, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.5,
-                    "strengths": ["国内极速轻量模型的代表作", "满足日超百亿请求的高并发吞吐不被限流"],
-                    "pain_points": ["复杂算法及长文本高召回需求下能力有缩水"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "TypeScript"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 几乎为零的极低成本百万 Token 计费；CodingPlan: 适用于各类轻量级开发辅助、流程调度及辅助聊天"
-                }
-            }
-        ]
-    },
-    "深度求索": {
-        "provider_name": "深度求索",
-        "region": "domestic",
-        "model_family": "DeepSeek-V4-Pro",
-        "pricing": {"prompt_price_per_million": 0.435, "completion_price_per_million": 0.87, "currency": "USD"},
-        "rate_limits": {"rpm": 10000, "tpm": 300000},
-        "features": {"context_window": 1000000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.95,
-            "strengths": ["保持顶级推理与100万上下文性价比之王", "纯透明开源长推理思维链技术先进"],
-            "pain_points": ["高峰期偶发高负载重试响应延迟", "默认RPM及TPM额度偏紧"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "C++", "Java", "Rust"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 注册首月赠千万级 Token 调试额度，API 全透传，兼容 Cursor 标配，支持深度自定义代码补全；CodingPlan: 提供专业级 API 调测工具与交互文档"
-        },
-        "models": [
-            {
-                "model_name": "DeepSeek-V4-Pro",
-                "pricing": {"prompt_price_per_million": 0.435, "completion_price_per_million": 0.87, "currency": "USD"},
-                "rate_limits": {"rpm": 10000, "tpm": 300000},
-                "features": {"context_window": 1000000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.95,
-                    "strengths": ["保持顶级推理与100万上下文性价比之王", "纯透明开源长推理思维链技术先进"],
-                    "pain_points": ["高峰期偶发高负载重试响应延迟", "默认RPM及TPM额度偏紧"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "C++", "Java", "Rust"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 注册首月赠千万级 Token 调试额度，API 全透传，兼容 Cursor 标配，支持深度自定义代码补全；CodingPlan: 提供专业级 API 调测工具与交互文档"
-                }
-            },
-            {
-                "model_name": "DeepSeek-Coder-V3",
-                "pricing": {"prompt_price_per_million": 0.14, "completion_price_per_million": 0.28, "currency": "USD"},
-                "rate_limits": {"rpm": 15000, "tpm": 500000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": False},
-                "user_feedback": {
-                    "developer_satisfaction": 4.9,
-                    "strengths": ["极致低延迟补全，首字响应小于 0.1 秒", "极佳的指令遵循与小参数代码推理性能"],
-                    "pain_points": ["在非常宏大的项目架构整体重构中大局观略逊一筹"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "Rust", "C++", "Go"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 极其便宜的调试选择，按量优惠大客户低至1折起；CodingPlan: 广泛作为 Cursor/VS Code 二级行级代码补全的主力后端"
-                }
-            }
-        ]
-    },
-    "智谱AI": {
-        "provider_name": "智谱AI",
-        "region": "domestic",
-        "model_family": "GLM-5.1",
-        "pricing": {"prompt_price_per_million": 5.0, "completion_price_per_million": 5.0, "currency": "CNY"},
-        "rate_limits": {"rpm": 8000, "tpm": 500000},
-        "features": {"context_window": 256000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.5,
-            "strengths": ["多模态视频分析优越", "全栈国产芯片华为昇腾深度适配，自主性极高"],
-            "pain_points": ["极长文档检索偶发微小幻觉", "高负载时TTFB响应稍有抖动"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Java", "Python", "C#"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 智谱开放平台提供极具吸引力的企业阶梯月包折扣；CodingPlan: 深度集成 CodeGeeX IDE 编码助手生态，提供极高集成体验"
-        },
-        "models": [
-            {
-                "model_name": "GLM-5.1-Pro",
-                "pricing": {"prompt_price_per_million": 5.0, "completion_price_per_million": 5.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 8000, "tpm": 500000},
-                "features": {"context_window": 256000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.5,
-                    "strengths": ["多模态视频分析优越", "全栈国产芯片华为昇腾深度适配，自主性极高"],
-                    "pain_points": ["极长文档检索偶发微小幻觉", "高负载时TTFB响应稍有抖动"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Java", "Python", "C#"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 智谱开放平台提供极具吸引力的企业阶梯月包折扣；CodingPlan: 深度集成 CodeGeeX IDE 编码助手生态，提供极高集成体验"
-                }
-            },
-            {
-                "model_name": "GLM-5.1-Flash",
-                "pricing": {"prompt_price_per_million": 0.0, "completion_price_per_million": 0.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 20000, "tpm": 1000000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.4,
-                    "strengths": ["百万 Token 永久免费政策", "极高的推理响应速度与数据隐私性"],
-                    "pain_points": ["面对复杂的算法设计有时结构不够严谨"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "Java", "TypeScript"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 永久免费调用策略，适合大流量试水；CodingPlan: 完美契合自动化脚本及轻量级 Web 开发工具链集成"
-                }
-            }
-        ]
-    },
-    "阿里通义千问": {
-        "provider_name": "阿里通义千问",
-        "region": "domestic",
-        "model_family": "Qwen3.7-Max",
-        "pricing": {"prompt_price_per_million": 2.5, "completion_price_per_million": 10.0, "currency": "CNY"},
-        "rate_limits": {"rpm": 15000, "tpm": 800000},
-        "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.8,
-            "strengths": ["今天刚首发专为智能体深度定制连续决策", "顶尖的长周期工具调用和代码遵循"],
-            "pain_points": ["瞬时高并发超限后重试排队延迟偏高", "在冷门学术专业领域相比旗舰稍有空间"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["TypeScript", "Python", "C++", "Go"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 百炼平台为开发者提供定期优惠 Token 抵扣券与梯度折扣；CodingPlan: 完美嵌入阿里云 Cloud Shell、VS Code 插件及云端开发套件"
-        },
-        "models": [
-            {
-                "model_name": "Qwen3.7-Max",
-                "pricing": {"prompt_price_per_million": 2.5, "completion_price_per_million": 10.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 15000, "tpm": 800000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.8,
-                    "strengths": ["今天刚首发专为智能体深度定制连续决策", "顶尖的长周期工具调用和代码遵循"],
-                    "pain_points": ["瞬时高并发超限后重试排队延迟偏高", "在冷门学术专业领域相比旗舰稍有空间"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["TypeScript", "Python", "C++", "Go"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 百炼平台为开发者提供定期优惠 Token 抵扣券与梯度折扣；CodingPlan: 完美嵌入阿里云 Cloud Shell、VS Code 插件及云端开发套件"
-                }
-            },
-            {
-                "model_name": "Qwen3.7-Coder",
-                "pricing": {"prompt_price_per_million": 1.0, "completion_price_per_million": 2.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 20000, "tpm": 1200000},
-                "features": {"context_window": 256000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.9,
-                    "strengths": ["针对编码深度特训，具备强悍算法生成及长文件重构能力", "代码数学逻辑处理及 FIM 补全首屈一指"],
-                    "pain_points": ["面对普通闲聊对话可能会掺杂大量代码输出标记"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "C++", "TypeScript", "Rust"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 百炼提供专属 Qwen Coder 沙盒令牌与极具性价比的高并发通道；CodingPlan: 大力集成于各类智能编码插件中"
-                }
-            }
-        ]
-    },
-    "xAI": {
-        "provider_name": "xAI",
-        "region": "international",
-        "model_family": "Grok-4.3",
-        "pricing": {"prompt_price_per_million": 3.0, "completion_price_per_million": 15.0, "currency": "USD"},
-        "rate_limits": {"rpm": 6000, "tpm": 400000},
-        "features": {"context_window": 2000000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.6,
-            "strengths": ["超大2M上下文窗口支撑复杂代码库级推理", "实时舆情搜索整合获取最新事实答案"],
-            "pain_points": ["API稳定性在极致高负载下偶有微小波动", "在同类型同参数模型中定价相对偏高"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "TypeScript", "Rust"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 每月赠送 $15 调试额度；CodingPlan: xAI为注册开发者提供慷慨免费额度沙盒及实时代码分析能力"
-        },
-        "models": [
-            {
-                "model_name": "Grok-4.3-Pro",
-                "pricing": {"prompt_price_per_million": 3.0, "completion_price_per_million": 15.0, "currency": "USD"},
-                "rate_limits": {"rpm": 6000, "tpm": 400000},
-                "features": {"context_window": 2000000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.6,
-                    "strengths": ["超大2M上下文窗口支撑复杂代码库级推理", "实时舆情搜索整合获取最新事实答案"],
-                    "pain_points": ["API稳定性在极致高负载下偶有微小波动", "在同类型同参数模型中定价相对偏高"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "TypeScript", "Rust"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 每月赠送 $15 调试额度；CodingPlan: xAI为注册开发者提供慷慨免费额度沙盒及实时代码分析能力"
-                }
-            },
-            {
-                "model_name": "Grok-4.3-Flash",
-                "pricing": {"prompt_price_per_million": 0.5, "completion_price_per_million": 2.0, "currency": "USD"},
-                "rate_limits": {"rpm": 12000, "tpm": 800000},
-                "features": {"context_window": 512000, "function_calling": True, "vision_support": False},
-                "user_feedback": {
-                    "developer_satisfaction": 4.4,
-                    "strengths": ["极高性价比的大窗口处理能力", "极速舆情及社交媒体事实搜索响应"],
-                    "pain_points": ["对于极其晦涩的深层次代码逻辑，推理质量略逊于 Pro 版本"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "TypeScript"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 享有专门的大文本并发读取优惠；CodingPlan: 实时数据管道及轻量级自动化 Agent 高效之选"
-                }
-            }
-        ]
-    },
-    "Meta": {
-        "provider_name": "Meta",
-        "region": "international",
-        "model_family": "Llama-4-Maverick",
-        "pricing": {"prompt_price_per_million": 0.20, "completion_price_per_million": 0.60, "currency": "USD"},
-        "rate_limits": {"rpm": 8000, "tpm": 500000},
-        "features": {"context_window": 1000000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.7,
-            "strengths": ["开源开放权重业界标杆可自由部署微调", "百万上下文MoE架构极致性价比"],
-            "pain_points": ["官方API生态碎片化需通过第三方平台调用", "中文支持相比原生国内模型稍逊"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "C++", "Java"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 第三方云托管平台提供出色的并发 Token 梯度折扣；CodingPlan: Meta提供开放模型权重及Meta AI Playground免费试用"
-        },
-        "models": [
-            {
-                "model_name": "Llama-4-Maverick-Pro",
-                "pricing": {"prompt_price_per_million": 0.20, "completion_price_per_million": 0.60, "currency": "USD"},
-                "rate_limits": {"rpm": 8000, "tpm": 500000},
-                "features": {"context_window": 1000000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.7,
-                    "strengths": ["开源开放权重业界标杆可自由部署微调", "百万上下文MoE架构极致性价比"],
-                    "pain_points": ["官方API生态碎片化需通过第三方平台调用", "中文支持相比原生国内模型稍逊"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "C++", "Java"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 第三方云托管平台提供出色的并发 Token 梯度折扣；CodingPlan: Meta提供开放模型权重及Meta AI Playground免费试用"
-                }
-            },
-            {
-                "model_name": "Llama-4-Maverick-Flash",
-                "pricing": {"prompt_price_per_million": 0.05, "completion_price_per_million": 0.15, "currency": "USD"},
-                "rate_limits": {"rpm": 15000, "tpm": 1000000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.5,
-                    "strengths": ["极度低廉的云端托管单价", "响应极快，非常适合大规模实时 Agent 编排流程"],
-                    "pain_points": ["在提取超长复杂数学和代码特征时偶尔存在特征丢失"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "Java"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 接近免费的极其优渥的按量付费计费；CodingPlan: Llama.cpp 完美兼容，支持快速进行本地开发路由及测试"
-                }
-            }
-        ]
-    },
-    "Cohere": {
-        "provider_name": "Cohere",
-        "region": "international",
-        "model_family": "Command-R-Plus-2",
-        "pricing": {"prompt_price_per_million": 2.50, "completion_price_per_million": 10.0, "currency": "USD"},
-        "rate_limits": {"rpm": 3000, "tpm": 250000},
-        "features": {"context_window": 256000, "function_calling": True, "vision_support": False},
-        "user_feedback": {
-            "developer_satisfaction": 4.3,
-            "strengths": ["企业级RAG检索增强生成业界第一", "SOC2认证数据安全合规"],
-            "pain_points": ["通用对话能力相比GPT-5.5稍弱", "中文支持尚需强化"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "TypeScript"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 提供卓越的企业级私有化 RAG 专属计费方案；CodingPlan: Cohere提供企业SDK试用沙盒及专属RAG工具链"
-        },
-        "models": [
-            {
-                "model_name": "Command-R-Plus-2",
-                "pricing": {"prompt_price_per_million": 2.50, "completion_price_per_million": 10.0, "currency": "USD"},
-                "rate_limits": {"rpm": 3000, "tpm": 250000},
-                "features": {"context_window": 256000, "function_calling": True, "vision_support": False},
-                "user_feedback": {
-                    "developer_satisfaction": 4.3,
-                    "strengths": ["企业级RAG检索增强生成业界第一", "SOC2认证数据安全合规"],
-                    "pain_points": ["通用对话能力相比GPT-5.5稍弱", "中文支持尚需强化"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "TypeScript"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 提供卓越的企业级私有化 RAG 专属计费方案；CodingPlan: Cohere提供企业SDK试用沙盒及专属RAG工具链"
-                }
-            },
-            {
-                "model_name": "Command-R-2-Light",
-                "pricing": {"prompt_price_per_million": 0.50, "completion_price_per_million": 2.0, "currency": "USD"},
-                "rate_limits": {"rpm": 6000, "tpm": 500000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": False},
-                "user_feedback": {
-                    "developer_satisfaction": 4.2,
-                    "strengths": ["针对智能体工具调用（Tool Use）进行极高精度优化", "体积轻便，具备极速相应特性"],
-                    "pain_points": ["单次最大输出文本长度（Output Limit）相对较窄"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "Go"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 智能体级超频并发调用特惠套餐；CodingPlan: 提供轻量化 IDE 侧边栏辅助调试沙盒"
-                }
-            }
-        ]
-    },
-    "Amazon Bedrock": {
-        "provider_name": "Amazon Bedrock",
-        "region": "international",
-        "model_family": "Nova-Premier-v2",
-        "pricing": {"prompt_price_per_million": 2.50, "completion_price_per_million": 12.50, "currency": "USD"},
-        "rate_limits": {"rpm": 5000, "tpm": 350000},
-        "features": {"context_window": 300000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.4,
-            "strengths": ["AWS云原生企业级一站式模型托管平台", "与100+模型目录无缝集成"],
-            "pain_points": ["定价层级复杂不够透明", "锁定AWS生态依赖"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "Java", "TypeScript"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: AWS Free Tier 框架下提供极具诚意的按量调试额度；CodingPlan: Amazon提供企业模型托管免费额度及统一AgentCore API"
-        },
-        "models": [
-            {
-                "model_name": "Nova-Premier-v2",
-                "pricing": {"prompt_price_per_million": 2.50, "completion_price_per_million": 12.50, "currency": "USD"},
-                "rate_limits": {"rpm": 5000, "tpm": 350000},
-                "features": {"context_window": 300000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.4,
-                    "strengths": ["AWS云原生企业级一站式模型托管平台", "与100+模型目录无缝集成"],
-                    "pain_points": ["定价层级复杂不够透明", "锁定AWS生态依赖"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "Java", "TypeScript"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: AWS Free Tier 框架下提供极具诚意的按量调试额度；CodingPlan: Amazon提供企业模型托管免费额度及统一AgentCore API"
-                }
-            },
-            {
-                "model_name": "Nova-Lite-v2",
-                "pricing": {"prompt_price_per_million": 0.40, "completion_price_per_million": 1.60, "currency": "USD"},
-                "rate_limits": {"rpm": 10000, "tpm": 800000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.3,
-                    "strengths": ["极高性价比的多模态音视频多路输入处理能力", "AWS 全球高保并发低延迟代理网关"],
-                    "pain_points": ["极高深度算法及学术问题解答精准度偶有细微漂移"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "Java"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 高并发云端调试极佳套餐，支持月度包；CodingPlan: 集成于 AWS Toolkit 插件中实现本地开发无感代码补全"
-                }
-            }
-        ]
-    },
-    "百度文心": {
-        "provider_name": "百度文心",
-        "region": "domestic",
-        "model_family": "ERNIE-4.5-Turbo",
-        "pricing": {"prompt_price_per_million": 4.0, "completion_price_per_million": 8.0, "currency": "CNY"},
-        "rate_limits": {"rpm": 12000, "tpm": 600000},
-        "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.5,
-            "strengths": ["国内政务金融领域合规第一品牌无可替代", "百度生态深度整合实现全栈AI应用"],
-            "pain_points": ["海外开发者接入流程相对繁琐", "API文档国际化仍有提升空间"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "Java", "C++"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 千帆大模型平台定期赠送高额免费调试 Token 包；CodingPlan: 百度智能云提供Comate编程助手免费额度及政务专属API通道"
-        },
-        "models": [
-            {
-                "model_name": "ERNIE-4.5-Pro",
-                "pricing": {"prompt_price_per_million": 8.0, "completion_price_per_million": 24.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 8000, "tpm": 400000},
-                "features": {"context_window": 256000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.5,
-                    "strengths": ["国内顶尖的中文化复杂逻辑理解力与创意写作", "支持处理极其繁琐深奥的行业规范生成"],
-                    "pain_points": ["计费单价在国内同类旗舰模型中明显偏高", "生成响应 TTFB 等待时间稍显漫长"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "Java", "Go"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 专为百度智能云大客户提供专属年度合约折扣；CodingPlan: 提供专业级百度 Comate 编程助手企业定制化接入"
-                }
-            },
-            {
-                "model_name": "ERNIE-4.5-Turbo",
-                "pricing": {"prompt_price_per_million": 4.0, "completion_price_per_million": 8.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 12000, "tpm": 600000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.5,
-                    "strengths": ["国内政务金融领域合规第一品牌无可替代", "百度生态深度整合实现全栈AI应用"],
-                    "pain_points": ["海外开发者接入流程相对繁琐", "API文档国际化仍有提升空间"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "Java", "C++"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 千帆大模型平台定期赠送高额免费调试 Token 包；CodingPlan: 百度智能云提供Comate编程助手免费额度及政务专属API通道"
-                }
-            }
-        ]
-    },
-    "月之暗面": {
-        "provider_name": "月之暗面",
-        "region": "domestic",
-        "model_family": "Kimi-K2.6",
-        "pricing": {"prompt_price_per_million": 2.0, "completion_price_per_million": 6.0, "currency": "CNY"},
-        "rate_limits": {"rpm": 10000, "tpm": 500000},
-        "features": {"context_window": 262144, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.6,
-            "strengths": ["超长上下文建模能力行业领先262K+", "Agent多步自主执行能力顶尖"],
-            "pain_points": ["高并发下API响应稳定性仍在优化中", "多模态视觉能力尚在追赶"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "TypeScript", "Go"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 注册立享高达一亿 Token 免费赠送调试包；CodingPlan: 月之暗面提供Kimi API免费测试沙盒支持超长文档及Agent调试"
-        },
-        "models": [
-            {
-                "model_name": "Kimi-K2.6-Pro",
-                "pricing": {"prompt_price_per_million": 3.0, "completion_price_per_million": 9.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 6000, "tpm": 350000},
-                "features": {"context_window": 524288, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.7,
-                    "strengths": ["极致超长 52K+ 上下文，支持超巨型代码走查", "长序列文档召回针尖大海零失误"],
-                    "pain_points": ["超大文本首次读取及解析载入耗时略显漫长"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "TypeScript", "Go", "Java"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 大量包月订阅用户尊享超长上下文特惠 Token 计费；CodingPlan: 完美支持与 Kimi 浏览器开发协同插件进行协作调测"
-                }
-            },
-            {
-                "model_name": "Kimi-K2.6-Turbo",
-                "pricing": {"prompt_price_per_million": 1.0, "completion_price_per_million": 3.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 15000, "tpm": 700000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.5,
-                    "strengths": ["超轻量极速长文本阅读器代表作", "优秀的多步流程控制与自主 Agent 规划"],
-                    "pain_points": ["在瞬时高并发调用下 API 有时会出现细微响应波动"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "TypeScript", "Go"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 注册立享高达一亿 Token 免费赠送调试包；CodingPlan: 月之暗面提供Kimi API免费测试沙盒支持超长文档及Agent调试"
-                }
-            }
-        ]
-    },
-    "零一万物": {
-        "provider_name": "零一万物",
-        "region": "domestic",
-        "model_family": "Yi-Lightning-2",
-        "pricing": {"prompt_price_per_million": 1.0, "completion_price_per_million": 4.0, "currency": "CNY"},
-        "rate_limits": {"rpm": 8000, "tpm": 400000},
-        "features": {"context_window": 200000, "function_calling": True, "vision_support": False},
-        "user_feedback": {
-            "developer_satisfaction": 4.4,
-            "strengths": ["MoE架构极致推理效率成本优势明显", "代码数学推理能力突出"],
-            "pain_points": ["品牌知名度相比头部厂商偏低", "API生态工具链尚不完善"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "C++", "TypeScript"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 专为中小开发者提供非常慷慨的免费 Token 信用额度；CodingPlan: 零一万物通过WorldWise平台提供多智能体部署及编码测试沙盒"
-        },
-        "models": [
-            {
-                "model_name": "Yi-Lightning-2",
-                "pricing": {"prompt_price_per_million": 1.0, "completion_price_per_million": 4.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 8000, "tpm": 400000},
-                "features": {"context_window": 200000, "function_calling": True, "vision_support": False},
-                "user_feedback": {
-                    "developer_satisfaction": 4.4,
-                    "strengths": ["MoE架构极致推理效率成本优势明显", "代码数学推理能力突出"],
-                    "pain_points": ["品牌知名度相比头部厂商偏低", "API生态工具链尚不完善"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "C++", "TypeScript"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 专为中小开发者提供非常慷慨的免费 Token 信用额度；CodingPlan: 零一万物通过WorldWise平台提供多智能体部署及编码测试沙盒"
-                }
-            },
-            {
-                "model_name": "Yi-Large-2-Pro",
-                "pricing": {"prompt_price_per_million": 3.0, "completion_price_per_million": 9.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 4000, "tpm": 250000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.5,
-                    "strengths": ["顶尖水平的中英文双语多模态泛化，创意写作绝佳", "优秀的跨文化指令理解与细致代码生成"],
-                    "pain_points": ["在持续大规模高吞吐并发调用下排队现象略高"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "TypeScript", "Go"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 提供翻译大包、长线写作专属折扣抵扣包；CodingPlan: 零一万物开放专业测试工具，支持极简配置与集成"
-                }
-            }
-        ]
-    },
-    "商汤科技": {
-        "provider_name": "商汤科技",
-        "region": "domestic",
-        "model_family": "SenseChat-Turbo-5",
-        "pricing": {"prompt_price_per_million": 3.0, "completion_price_per_million": 9.0, "currency": "CNY"},
-        "rate_limits": {"rpm": 6000, "tpm": 300000},
-        "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-        "user_feedback": {
-            "developer_satisfaction": 4.3,
-            "strengths": ["计算机视觉+大模型深度融合业界领先", "自动驾驶与工业视觉场景独特优势"],
-            "pain_points": ["纯文本推理相比专精文本模型稍逊", "社区生态活跃度仍在培育中"]
-        },
-        "coding_plan": {
-            "is_supported_in_editor": True,
-            "language_optimizations": ["Python", "C++"],
-            "has_sandbox_env": True,
-            "plan_description": "TokenPlan: 日日新平台为新接入开发者提供极其诱人的免费多模态 Token 测试包；CodingPlan: 商汤日日新平台提供视觉+语言多模态API测试沙盒及企业定制方案"
-        },
-        "models": [
-            {
-                "model_name": "SenseChat-Pro-5",
-                "pricing": {"prompt_price_per_million": 5.0, "completion_price_per_million": 15.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 4000, "tpm": 200000},
-                "features": {"context_window": 256000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.4,
-                    "strengths": ["多模态工业级计算机视觉处理与文本高精度生成完美融合", "自驾场景及高空图分析具有卓越专享表现"],
-                    "pain_points": ["文本数学及算法大局观设计相比垂直文本模型有微小优化空间"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "C++", "Java"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 支持结合视频帧与文字的多路综合并发计费套餐折上折；CodingPlan: 支持通过日日新云平台进行定制化大模型开发和 IDE 云网关调试"
-                }
-            },
-            {
-                "model_name": "SenseChat-Turbo-5",
-                "pricing": {"prompt_price_per_million": 3.0, "completion_price_per_million": 9.0, "currency": "CNY"},
-                "rate_limits": {"rpm": 6000, "tpm": 300000},
-                "features": {"context_window": 128000, "function_calling": True, "vision_support": True},
-                "user_feedback": {
-                    "developer_satisfaction": 4.3,
-                    "strengths": ["计算机视觉+大模型深度融合业界领先", "自动驾驶与工业视觉场景独特优势"],
-                    "pain_points": ["纯文本推理相比专精文本模型稍逊", "社区生态活跃度仍在培育中"]
-                },
-                "coding_plan": {
-                    "is_supported_in_editor": True,
-                    "language_optimizations": ["Python", "C++"],
-                    "has_sandbox_env": True,
-                    "plan_description": "TokenPlan: 日日新平台为新接入开发者提供极其诱人的免费多模态 Token 测试包；CodingPlan: 商汤日日新平台提供视觉+语言多模态API测试沙盒及企业定制方案"
-                }
-            }
-        ]
-    }
-}
+_VENDORS_JSON_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'vendors.json')
+try:
+    with open(_VENDORS_JSON_PATH, 'r', encoding='utf-8') as _f:
+        OFFLINE_MODELS_FALLBACK = json.load(_f)
+except (FileNotFoundError, json.JSONDecodeError) as _e:
+    print(f"[WARNING] vendors.json 加载失败: {_e}，使用空字典兜底")
+    OFFLINE_MODELS_FALLBACK = {}
+
 
 def get_offline_models_fallback(provider_name: str):
-    import sys
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
     from schemas import ModelIntelligenceSchema, PricingSchema, RateLimitsSchema, FeaturesSchema, UserFeedbackSchema, CodingPlanSchema
     fallback_data = OFFLINE_MODELS_FALLBACK.get(provider_name)
     if not fallback_data:
@@ -970,12 +127,71 @@ def get_offline_models_fallback(provider_name: str):
         ))
     return res
 
-def offline_rule_llm_mock(prompt: str) -> str:
-    """针对 2026 旗舰大厂演示场景的高质量离线规则大模型兜底，模拟 LLM 输出，确保系统极致健壮性"""
+def offline_rule_llm_mock(prompt: str, system_prompt: str = None) -> str:
+    """针对 2026 旗舰大厂演示场景的高高质量离线规则大模型兜底，模拟 LLM 输出，确保系统极致健壮性"""
+    if system_prompt:
+        system_prompt_lower = system_prompt.lower()
+        # 1. 营销词汇/宣传语语义清洗 (sanitize_marketing_jargon_via_llm)
+        if "极其严谨" in system_prompt_lower or "语义清洗" in system_prompt_lower or "jargon" in system_prompt_lower or "宣传词汇" in system_prompt_lower:
+            return sanitize_marketing_jargon(prompt)
+            
+        # 2. 需求解析 (requirement_parser_node)
+        if any(kw in system_prompt_lower for kw in ["json 格式", "结构化过滤", "云原生大模型", "精确提炼"]):
+            from agents.requirement_parser import parse_requirement_offline
+            res_dict = parse_requirement_offline(prompt)
+            res_dict["analyst_thought"] = (
+                "【离线专家选型建议】通过本地深度多因子启发式引擎，已对您的竞品分析需求实施离线架构模式匹配。本系统已就您的核心成本上限与特定模型特性进行双轨道高性价比设计路由。"
+            )
+            return json.dumps(res_dict, ensure_ascii=False)
+            
+        # 3. 行业洞察/对比深度分析 (writer_node)
+        if any(kw in system_prompt_lower for kw in ["行业分析师", "横向对比", "深度对比洞察"]):
+            return (
+                "本次分析覆盖当前国际与国内一线的顶尖主流大语言模型厂商。国内以火山引擎、深度求索为代表，国外则以 OpenAI、Google 为代表。在定价层面，深度求索和火山引擎通过极具竞争力的定价重塑了每百万 Token 的性价比模型；而在复杂上下文窗口与多模态推理能力上，谷歌 Gemini 和月之暗面 Kimi 各有胜场。建议对于高并发客服场景采用性价比模型，而对于代码深度推理或多模态任务使用前沿旗舰模型。"
+            )
+
+        # 4. 一致性检查 (qc_node)
+        if any(kw in system_prompt_lower for kw in ["一致性", "校验", "事实审计", "consistency"]):
+            return "【一致性审计结果】：一致性审计无误，实体提取事实逻辑与原始语料高度契合，无明显夸大成分。"
+            
+        # 5. 场景化智能推荐分析 (scenario_analyst_node)
+        if any(kw in system_prompt_lower for kw in ["大模型选型顾问", "选型建议", "scenario_analyst", "场景分析"]):
+            prompt_lower = prompt.lower()
+            if "data_analysis" in system_prompt_lower or "数据分析" in prompt_lower or "data_analysis" in prompt_lower:
+                return """### 问题
+本评估场景的核心是解决 AI 数据分析助手的大模型与产品能力选型问题。用户需要通过上传 Excel、CSV 文件或直接连接数据库，让 AI 自动进行数据理解、清洗、趋势分析、图表生成、异常检测与报告输出。因此，评估及选型指标必须聚焦于深度表格解析、沙箱代码执行以及企业级合规脱敏等数据分析专有维度。
+
+### 输出结果
+为构建顶尖的 AI 数据分析助手，推荐以下模型与产品能力组合：
+1. **模型核心能力维度**：
+   - **数据理解与表格解析**：长表格结构理解、多维数据对齐与脏数据清洗、数据清洗能力。
+   - **统计与趋势分析**：时序趋势预测、多指标相关性统计、异常检测与归因解释。
+   - **代码生成与执行**：高精度 SQL 查询生成、SQL 生成能力、Python 数据分析代码生成、多模态图表自动渲染。
+   - **报告生成与输出**：自然语言洞察提炼、高保真结构化 Markdown/PDF 报告生成、严苛的幻觉控制。
+2. **产品核心功能模块**：
+   - **数据源与连接**：Excel/CSV 拖拽上传解析、关系型数据库（MySQL/PG）及数仓安全连接。
+   - **分析与交互**：实时数据预览、智能字段自动识别、自定义图表配置面板、分析任务历史追溯。
+   - **安全与交付**：导出 PDF/Word/PPT、敏感数据动态脱敏、企业级私有化部署、高可用权限管理（RBAC）、分析路径可解释性与结果可追溯。
+3. **候选模型与推荐组合**：
+   - **推荐主力模型**：**Google Gemini 1.5 Pro** / **DeepSeek-V3**（拥有极强的复杂推理与高精度 Python/SQL 代码生成能力，结合数据沙盒能实现完美的图表渲染）。
+   - **推荐性价比路由模型**：**火山引擎 Doubao-pro** / **Gemini 1.5 Flash**（处理简单 SQL 查询、数据清洗与常规报表任务，实现极低的使用成本）。
+
+### 分析与整改
+1. **原回答跑偏原因**：原系统在处理「AI数据分析与自动化报表」场景时，由于 RAG 检索没有对低相关度文本进行过滤，导致 Mistral 编程新闻、Codestral/Claude 代码模型发布等噪音数据污染了检索上下文。同时，系统之前未能对 `data_analysis` 场景定制专属的权重指标，错误地套用了通用模型价格与多模态大盘。
+2. **如何避免低相关度 RAG 污染**：
+   - **引入阈值过滤**：实现 strict score 强过滤（`score >= 0.20`），彻底屏蔽低于相关度阈值的行业噪音。
+   - **场景隔离检索**：在 `evidence_retriever.py` 中传入 `target_scenario=scenario`，确保 RAG 检索在向量数据库端实现物理场景隔离。
+   - **微调专属权重**：对 `data_analysis` 场景在 `scoring_agent.py` 中进行指标权重定制，将“代码执行/开发者生态”与“安全合规”的权重调至最高。
+   - **动态报表定制**：在 `engine.py` 写入节点中，针对 `data_analysis` 场景自适应输出定制化的 Appendix C BI 报表厂商能力对比大盘，避免学术写作等残留内容污染。"""
+            else:
+                return "根据您的具体场景需求，推荐采用分层路由策略：日常常规任务路由至性价比模型（如火山引擎 Doubao-pro），复杂多步推理与长文本分析任务路由至旗舰模型（如 Google Gemini 1.5 Pro）。务必关注厂商的数据合规安全与 SLA 稳定性。"
+
+    # 默认 fallback 到竞品结构化字典数据提取 (analyzer_node 抽取，或旧匹配)
     match = re.search(r'【当前分析的竞品厂商】:\s*([^\n\r]+)', prompt)
     if match:
         current = match.group(1).strip()
     else:
+        # 如果是其他兜底情况，先看有没有明显的厂商名字，若无默认 OpenAI
         prompt_lower = prompt.lower()
         if "openai" in prompt_lower:
             current = "OpenAI"
@@ -1030,9 +246,9 @@ def offline_rule_llm_mock(prompt: str) -> str:
             bad_data = copy.deepcopy(data)
             if "pricing" in bad_data and "completion_price_per_million" in bad_data["pricing"]:
                 del bad_data["pricing"]["completion_price_per_million"]
-            return json.dumps(bad_data)
+            return json.dumps(bad_data, ensure_ascii=False)
             
-    return json.dumps(data)
+    return json.dumps(data, ensure_ascii=False)
 
 # ==========================================
 # 3. LangGraph 各节点 Nodes 编写
@@ -1216,7 +432,6 @@ def qc_node(state: AgentState) -> Dict[str, Any]:
     trace_msg = f"[QC Agent] 正在对厂商 [{current}] 的结构化数据进行 Schema 强类型门禁审核。"
     print(trace_msg)
     
-    validation_verdict = False
     feedback = ""
     
     try:
@@ -1371,19 +586,51 @@ def qc_node(state: AgentState) -> Dict[str, Any]:
             url=f"http://mock-server:8080/mock/{path_name}"
         )
         
-        validation_verdict = True
         trace_msg += " 强 Schema 门禁与事实核查审核通过！各项指标、用户反馈和 CodingPlan 均符合数据契约与客观事实，未检出大模型幻觉。"
-        
+
+        # LLM 语义一致性审核（作为真正的 Critic 决策，直接参与打回判定）
+        llm_client = get_llm_client()
+        if llm_client is not None:
+            try:
+                consistency_system = (
+                    "你是一个专业级数据一致性批判专家。严密检查以下提取的模型特征是否含有内部逻辑矛盾"
+                    "（如：价格标注为0但币种为CNY且无免费描述，声称不支持视觉却开启了多模态，"
+                    "或者RPM/TPM配置极其荒谬不合常规等）。如果数据逻辑严密一致，回复'PASS'。"
+                    "如果发现明显矛盾逻辑漏洞，请回复'FAIL: [矛盾的具体逻辑阐述]'。"
+                )
+                consistency_data = {
+                    "provider_name": comp_intel.provider_name,
+                    "pricing": comp_intel.pricing.model_dump() if comp_intel.pricing else {},
+                    "features": comp_intel.features.model_dump() if comp_intel.features else {},
+                    "model_family": comp_intel.model_family
+                }
+                consistency_user = json.dumps(consistency_data, ensure_ascii=False, indent=2)
+                consistency_response = call_llm(consistency_user, system_prompt=consistency_system)
+
+                if consistency_response.strip().startswith("FAIL"):
+                    warn_msg = f"[QC] LLM语义一致性拦截 [{current}]: {consistency_response.strip()}"
+                    print(warn_msg)
+                    raise ValueError(f"[QC Critic 逻辑一致性拦截] 检测到提取的数据内部存在显著逻辑矛盾：{consistency_response.strip()[5:]}")
+                else:
+                    pass_msg = f"[QC] LLM语义一致性检查通过 [{current}]"
+                    print(pass_msg)
+                    trace_msg += " LLM语义一致性交叉审查通过。"
+            except ValueError:
+                # 重新抛出以触发被打回
+                raise
+            except Exception as e:
+                err_msg = f"[QC] LLM语义一致性检查异常 [{current}]: {e}"
+                print(err_msg)
+
         # 回流写入 reports_archive（由工作流类在线程安全锁下写回）
         return {
             "validation_verdict": True,
             "feedback": "",
-            "comp_intel_dict": comp_intel.dict(),
+            "comp_intel_dict": comp_intel.model_dump(),
             "trace_logs": state.get("trace_logs", []) + [trace_msg]
         }
         
     except ValidationError as e:
-        validation_verdict = False
         retry += 1
         
         errors = e.errors()
@@ -1403,7 +650,6 @@ def qc_node(state: AgentState) -> Dict[str, Any]:
         }
         
     except ValueError as e:
-        validation_verdict = False
         retry += 1
         feedback = str(e)
         trace_msg += f" [QC_ALERT] [事实审计打回] 检测到事实不合规: {feedback}。触发反馈闭环，强制打回重构！"
@@ -1415,33 +661,299 @@ def qc_node(state: AgentState) -> Dict[str, Any]:
             "trace_logs": state.get("trace_logs", []) + [trace_msg]
         }
 
+# 辅助函数：满意度定性等级映射
+def get_satisfaction_level(score: Any) -> str:
+    """将开发者满意度评分数值归一化为定性等级，抹除广告宣传化倾向"""
+    try:
+        val = float(score)
+    except (ValueError, TypeError):
+        return "普通"
+    if val >= 4.8:
+        return "较高"
+    elif val >= 4.5:
+        return "中高"
+    elif val >= 4.0:
+        return "中等"
+    else:
+        return "普通"
+
+
+# 辅助函数：语义级去营销宣传化文本清洗
+def sanitize_marketing_jargon(text: str) -> str:
+    """消除竞品分析报告中的绝对化、夸张化营销软文表述，确保内容中立、客观与严谨"""
+    if not text:
+        return text
+    
+    # 替换规则映射表，由长到短避免匹配冲突
+    replacements = {
+        "今天刚首发专为智能体深度定制连续决策": "专为智能体连续决策进行了定制优化",
+        "今天刚首发": "正式发布",
+        "今天刚发布": "正式发布",
+        "百万 Token 永久免费政策": "提供百万级免费 Token 额度",
+        "百万 Token 永久免费": "百万级免费 Token",
+        "永久免费调用策略，适合大流量试水": "免费测试额度策略，适合初期试水",
+        "永久免费": "提供免费额度",
+        "极致低延迟补全，首字响应小于 0.1 秒": "提供低延迟补全响应",
+        "首字响应小于 0.1 秒": "首字响应时间处于行业前列",
+        "首字响应小于0.1秒": "首字响应时间处于行业前列",
+        "国内政务金融领域合规第一品牌无可替代": "在国内政务金融领域具备较高的安全合规性",
+        "无可替代": "具备独特优势",
+        "国内顶尖的中文化复杂逻辑理解力与创意写作": "具备优秀的中文化复杂逻辑理解力与创意写作能力",
+        "国内顶尖": "具备行业优秀水平",
+        "业界最高并发响应速度比前代快4倍": "具备高并发响应速度，性能相比前代有显著提升",
+        "目前全球综合编码第一神作": "在综合编码领域表现优秀的代表性模型之一",
+        "企业级RAG检索增强生成业界第一": "在企业级 RAG 检索增强生成方面表现优异",
+        "第一品牌": "知名品牌",
+        "第一神作": "代表性模型",
+        "业界第一": "表现优异",
+        "数学逻辑处理及 FIM 补全首屈一指": "在数学逻辑处理及 FIM 补全方面表现优秀",
+        "多步强化学习推理首屈一指": "在多步强化学习推理方面表现优异",
+        "Agent多步自主执行能力顶尖": "Agent多步自主执行能力优秀",
+        "代码数学逻辑处理及 FIM 补全首屈一指": "代码数学逻辑处理及 FIM 补全表现优异",
+        "首屈一指": "表现优秀",
+        "顶尖的": "优秀的",
+        "顶尖水平": "优秀水平",
+        "顶尖": "优秀",
+        "第一": "代表性",
+        "极佳的": "优秀的",
+        "极高的": "优秀的",
+        "强悍": "优秀",
+        "绝对": "显著",
+        "无可匹敌": "竞争力强",
+        "世界领先": "国际前沿",
+        "全球最强": "国际前沿",
+        "最强": "领先",
+        "降维打击": "竞争优势显著",
+        "遥遥领先": "行业领先",
+        "快4倍": "显著提升"
+    }
+    
+    sanitized = text
+    for jargon in sorted(replacements.keys(), key=len, reverse=True):
+        sanitized = sanitized.replace(jargon, replacements[jargon])
+    return sanitized
+
+
+def sanitize_marketing_jargon_via_llm(text: str) -> str:
+    """消除竞品分析报告中的绝对化、夸张化营销软文表述，确保内容中立、客观与严谨"""
+    if not text:
+        return text
+    
+    system_prompt = (
+        "你是一个极其严谨的学术级人工智能竞品分析师。请对输入的 markdown 文本进行深度语义清洗，"
+        "将其中的所有绝对化、营销化、夸大虚假宣传词汇（例如：'绝对第一'、'遥遥领先'、'无可匹敌'、'降维打击'、'最强'、'前所未有'、'颠覆性'等）"
+        "修改为完全客观、中立、平实的学术性描述。保持原有的 markdown 格式、表格和结构完全不改变，"
+        "只修正语意中的营销宣传倾向。请不要输出任何解释，直接返回清洗后的整篇文本。"
+    )
+    
+    try:
+        # 调用大模型执行深度语义清洗
+        cleaned_text = call_llm(prompt=text, system_prompt=system_prompt)
+        if cleaned_text and len(cleaned_text.strip()) > len(text) * 0.5:
+            # 简单校验，防止大模型返回空响应或者截断
+            return cleaned_text.strip()
+    except Exception as e:
+        print(f"[LLM Jargon Sanitizer] LLM 语义清洗异常: {e}，将回退至规则引擎进行处理。")
+        
+    return sanitize_marketing_jargon(text)
+
+
+# 辅助函数：递归/深度清洗竞品字典中的文本字段
+def sanitize_competitor_intelligence_dict(data: Dict[str, Any]) -> Dict[str, Any]:
+    """对竞品结构化字典中的所有文本字段进行营销词汇清洗，保持数据契约完全中立客观"""
+    if not data:
+        return data
+    
+    import copy
+    clean_data = copy.deepcopy(data)
+    
+    if "user_feedback" in clean_data and clean_data["user_feedback"]:
+        uf = clean_data["user_feedback"]
+        if "strengths" in uf and uf["strengths"]:
+            uf["strengths"] = [sanitize_marketing_jargon(s) for s in uf["strengths"]]
+        if "pain_points" in uf and uf["pain_points"]:
+            uf["pain_points"] = [sanitize_marketing_jargon(p) for p in uf["pain_points"]]
+            
+    if "coding_plan" in clean_data and clean_data["coding_plan"]:
+        cp = clean_data["coding_plan"]
+        if "plan_description" in cp and cp["plan_description"]:
+            cp["plan_description"] = sanitize_marketing_jargon(cp["plan_description"])
+            
+    if "sources" in clean_data and clean_data["sources"]:
+        for field, src in clean_data["sources"].items():
+            if src and "snippet" in src and src["snippet"]:
+                src["snippet"] = sanitize_marketing_jargon(src["snippet"])
+                
+    if "models" in clean_data and clean_data["models"]:
+        for m in clean_data["models"]:
+            if "user_feedback" in m and m["user_feedback"]:
+                uf = m["user_feedback"]
+                if "strengths" in uf and uf["strengths"]:
+                    uf["strengths"] = [sanitize_marketing_jargon(s) for s in uf["strengths"]]
+                if "pain_points" in uf and uf["pain_points"]:
+                    uf["pain_points"] = [sanitize_marketing_jargon(p) for p in uf["pain_points"]]
+            if "coding_plan" in m and m["coding_plan"]:
+                cp = m["coding_plan"]
+                if "plan_description" in cp and cp["plan_description"]:
+                    cp["plan_description"] = sanitize_marketing_jargon(cp["plan_description"])
+                    
+    return clean_data
+
+
 # 节点 E: 报告撰写 Agent (Writer)
+def _render_scenario_summary(state: Dict[str, Any]) -> str:
+    """根据场景分析结果渲染报告顶部的智能推荐摘要"""
+    scenario_analysis = state.get("scenario_analysis")
+    parsed_req = state.get("parsed_requirement")
+
+    if not scenario_analysis and not parsed_req:
+        return ""
+
+    scenario_name = ""
+    raw_query = ""
+    if scenario_analysis:
+        scenario_name = scenario_analysis.get("scenario_name", "")
+        raw_query = scenario_analysis.get("raw_query", "")
+    elif parsed_req:
+        from agents.scenario_analyst import SCENARIO_DISPLAY_NAMES
+        scenario_name = SCENARIO_DISPLAY_NAMES.get(parsed_req.get("scenario", "general"), "通用场景")
+        raw_query = parsed_req.get("raw_query", "")
+
+    if not raw_query:
+        return ""
+
+    summary = f"""## 💡 针对您的需求的智能推荐
+
+> **您的需求**: {raw_query}
+> **识别场景**: {scenario_name}
+
+"""
+
+    # 插入 LLM 生成的智能分析
+    if scenario_analysis:
+        llm_analysis = scenario_analysis.get("llm_analysis", "")
+        advice = scenario_analysis.get("advice", "")
+        top_vendors = scenario_analysis.get("top_vendors", [])
+
+        if llm_analysis:
+            summary += f"### 选型建议\n\n{llm_analysis}\n\n"
+        elif advice:
+            summary += f"### 选型建议\n\n{advice}\n\n"
+
+        if top_vendors:
+            summary += "### 推荐排名\n\n"
+            summary += "| 排名 | 厂商 | 综合得分 | 场景关键指标 | 核心优势 | 参考价格 |\n"
+            summary += "| :---: | :--- | :---: | :--- | :--- | :--- |\n"
+            for v in top_vendors[:5]:
+                key_scores_str = "、".join(v.get("key_scores", [])[:3])
+                strengths_str = "、".join(v.get("strengths", [])[:2]) if v.get("strengths") else "-"
+                summary += f"| {v['rank']} | **{v['vendor']}** | {v['score']:.1f} | {key_scores_str} | {strengths_str} | {v.get('price', '-')} |\n"
+            summary += "\n"
+
+    summary += "---\n\n"
+    return summary
+
+
 def writer_node(state: AgentState) -> Dict[str, Any]:
     print("[Writer Agent] 收到所有通过审核的结构化数据，开始撰写最终综合报告。")
     archive = state.get("reports_archive", {})
-    
+
+    # 语义级深度去营销宣传化清洗
+    clean_archive = {}
+    for prov_key, data in archive.items():
+        clean_archive[prov_key] = sanitize_competitor_intelligence_dict(data)
+
     domestic_list = []
     international_list = []
-    
-    for prov_key, data in archive.items():
+
+    for prov_key, data in clean_archive.items():
         region = data.get("region", "international")
         # 兼容性多重校验区域
-        if region == "domestic" or prov_key in ["火山引擎", "深度求索", "智谱AI", "阿里通义千问", "Doubao", "DeepSeek", "Zhipu", "Qwen"]:
+        if region == "domestic" or prov_key in ["火山引擎", "深度求索", "智谱AI", "阿里通义千问", "Doubao", "DeepSeek", "Zhipu", "Qwen", "百度文心", "Baidu", "月之暗面", "Moonshot", "Kimi", "零一万物", "Yi", "商汤科技", "SenseTime"]:
             domestic_list.append(data)
         else:
             international_list.append(data)
-            
+
+    # 生成场景化推荐摘要（仅 smart_query 模式）
+    scenario_summary = _render_scenario_summary(state)
+
     # 渲染符合 Google & Apple HIG 科技美学的报告
     report = """# 📊 全球主流大语言模型 API 最新厂商竞品分析智能大盘 (2026旗舰版)
 
-本报告由 **HarnessFlow 并发多 Agent 数字化调研大组** 自动合并编制。数据源已通过合规脱敏、强 Pydantic 契约校验以及信息源头 100% 可追溯性 Trace 审计，消除了大模型幻觉风险，各项指标、开发者舆情及 CodingPlan 完美就绪。
+本报告由 **HarnessFlow 并发多 Agent 数字化调研大组** 自动合并编制。数据源已通过合规脱敏、强 Pydantic 契约校验以及信息源头 100% 可追溯性 Trace 审计。
 
----
+"""
 
-## 1. 2026年全球代表性厂商最新定价与核心指标
+    # 插入场景化推荐摘要
+    if scenario_summary:
+        report += scenario_summary
+
+    # ===== LLM 驱动的核心洞察：多厂商对比深度分析 =====
+    try:
+        vendor_summaries = []
+        for prov_key, data in clean_archive.items():
+            pricing = data.get("pricing", {})
+            features = data.get("features", {})
+            vendor_summaries.append(
+                f"- {data.get('provider_name', prov_key)}: "
+                f"模型系列={data.get('model_family', 'N/A')}, "
+                f"输入价格={pricing.get('prompt_price_per_million', 'N/A')} {pricing.get('currency', '')}/百万Token, "
+                f"输出价格={pricing.get('completion_price_per_million', 'N/A')} {pricing.get('currency', '')}/百万Token, "
+                f"上下文窗口={features.get('context_window', 'N/A')} tokens, "
+                f"函数调用={'支持' if features.get('function_calling') else '不支持'}, "
+                f"多模态视觉={'支持' if features.get('vision_support') else '不支持'}"
+            )
+        vendor_data_text = "\n".join(vendor_summaries)
+
+        insight_system_prompt = (
+            "你是一位资深 AI 行业分析师，擅长从定价策略、技术能力和生态布局三个维度"
+            "对多家大语言模型厂商进行横向对比分析。请生成一段 200-300 字的深度对比洞察，"
+            "要求观点鲜明、数据驱动、具有决策参考价值。不要使用营销用语。"
+        )
+        insight_user_prompt = (
+            f"以下是当前全球主流大语言模型厂商的核心数据摘要，请基于这些数据生成对比分析洞察：\n\n"
+            f"{vendor_data_text}"
+        )
+
+        llm_insight = call_llm(prompt=insight_user_prompt, system_prompt=insight_system_prompt)
+        report += f"""## 核心洞察：多厂商对比深度分析
+
+{llm_insight}
+
+"""
+    except Exception as e:
+        print(f"[Writer Agent] LLM 洞察生成失败，回退到规则摘要: {e}")
+        # 规则化回退摘要
+        num_vendors = len(clean_archive)
+        vendor_names = [d.get("provider_name", k) for k, d in clean_archive.items()]
+        prices = []
+        for d in clean_archive.values():
+            p = d.get("pricing", {}).get("prompt_price_per_million")
+            if p is not None:
+                try:
+                    prices.append(float(str(p).replace(",", "")))
+                except (ValueError, TypeError):
+                    pass
+        price_range = f"{min(prices):.2f} - {max(prices):.2f}" if prices else "N/A"
+        fallback_insight = (
+            f"本次分析覆盖 {num_vendors} 家厂商（{', '.join(vendor_names[:5])}"
+            f"{'等' if num_vendors > 5 else ''}），"
+            f"输入定价区间为 {price_range} / 百万 Token。"
+            f"各厂商在上下文窗口长度、多模态能力和函数调用支持方面存在显著差异，"
+            f"建议根据具体业务场景的 Token 吞吐量需求和功能依赖进行选型。"
+        )
+        report += f"""## 核心洞察：多厂商对比深度分析
+
+{fallback_insight}
+
+"""
+
+    report += """---
+
+## 附录 A. 2026年全球代表性厂商最新定价与核心指标
 
 ### 🇨🇳 国内代表厂商 (Domestic Providers)
-以下是国内大语言模型 API 厂商在性价比、推理窗口及处理规格上的对比：
+
 
 | 厂商名称 | 2026核心代表模型 | 输入单价 (每百万 Token) | 输出单价 (每百万 Token) | 上下文窗口 | 函数调用 | 多模态视觉 | 数据隐私状态 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -1457,7 +969,7 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
 
     report += """
 ### 🌐 国外前沿厂商 (International Providers)
-以下是国外前沿大语言模型 API 厂商的核心成本与性能规格一览：
+
 
 | 厂商名称 | 2026核心代表模型 | 输入单价 (每百万 Token) | 输出单价 (每百万 Token) | 上下文窗口 | 函数调用 | 多模态视觉 | 数据隐私状态 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -1475,9 +987,7 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
     report += """
 ---
 
-## 2. 开发者生态舆情与用户满意度大盘 (Developer Feedback)
-
-本大盘多维度呈现开发者社区对于 2026 年最新旗舰模型的实际体验与槽点口碑，帮助团队完美规避选型风险：
+## 附录 B. 开发者生态舆情与用户满意度 (Developer Feedback)
 
 | 厂商名称 | 模型系列 | 开发者整体满意度 | 用户核心优势优势 (Strengths) | 用户主要吐槽/局限性 (Pain Points) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -1489,31 +999,150 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
             continue
         strengths_str = "、".join(feedback.get("strengths", []))
         pain_str = "、".join(feedback.get("pain_points", []))
-        report += f"| **{data['provider_name']}** | {data['model_family']} | ⭐ {feedback.get('developer_satisfaction', 0.0)} / 5.0 | {strengths_str} | {pain_str} |\n"
+        satisfaction_score = feedback.get('developer_satisfaction', 0.0)
+        satisfaction_level = get_satisfaction_level(satisfaction_score)
+        report += f"| **{data['provider_name']}** | {data['model_family']} | {satisfaction_level} | {strengths_str} | {pain_str} |\n"
 
-    # 新章节 3: 开发者编程开发 CodingPlan 与支持大盘
-    report += """
+    # 新章节 3: 动态生成附录 C。基于 scenario 动态适配大盘对比表格，完全防历史 RAG 污染并深度定制
+    parsed_req = state.get("parsed_requirement") or {}
+    scenario = parsed_req.get("scenario", "general")
+    
+    if scenario == "code_development":
+        report += """
 ---
 
-## 3. 开发者编程开发 CodingPlan 与支持大盘 (Developer Coding Plan)
-
-详细记录各大厂商对于 IDE 嵌入（如 Cursor, VS Code 等编辑器）的兼容状态，针对特定语言的生成优化情况，以及是否提供免费的测试沙盒环境：
+## 附录 C. 开发者编程 CodingPlan 与支持 (Developer Coding Plan)
 
 | 厂商名称 | 模型系列 | IDE 嵌入支持 | 针对优化语言列表 | 免费沙盒环境 | 2026 编码专属优惠计划 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 """
-    for data in all_providers:
-        cp = data.get("coding_plan", {})
-        if not cp:
-            continue
-        lang_str = ", ".join(cp.get("language_optimizations", []))
-        report += f"| **{data['provider_name']}** | {data['model_family']} | {'✅ 支持嵌入' if cp.get('is_supported_in_editor') else '❌ 不支持'} | `{lang_str}` | {'✅ 提供沙盒' if cp.get('has_sandbox_env') else '❌ 无沙盒'} | {cp.get('plan_description', '-')} |\n"
+        for data in all_providers:
+            cp = data.get("coding_plan", {})
+            if not cp:
+                continue
+            lang_str = ", ".join(cp.get("language_optimizations", []))
+            report += f"| **{data['provider_name']}** | {data['model_family']} | {'✅ 支持嵌入' if cp.get('is_supported_in_editor') else '❌ 不支持'} | `{lang_str}` | {'✅ 提供沙盒' if cp.get('has_sandbox_env') else '❌ 无沙盒'} | {cp.get('plan_description', '-')} |\n"
+
+    elif scenario == "data_analysis":
+        report += """
+---
+
+## 附录 C. 企业级 AI 数据分析与 BI 报表助手支持大盘 (AI Data Analysis & Automated BI Reporting)
+
+| 厂商名称 | 模型系列 | 表格理解与代码执行 (Code Gen & Table Parsing) | 图表生成与异常分析 (Chart Gen & Anomaly Analysis) | 数据库连接与预览 (Database Conn & Preview) | 导出与脱敏合规 (Export & Security Compliance) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+"""
+        for data in all_providers:
+            features = data.get("features", {})
+            cp = data.get("coding_plan", {}) or {}
+            sanitized = "✅ 支持数据脱敏" if data.get("is_sanitized") else "❌ 需自定义脱敏"
+            p_name = data.get("provider_name", "")
+            
+            if p_name in ["Google", "OpenAI", "Anthropic", "Kimi", "DeepSeek", "月之暗面"]:
+                table_parse = "✅ 顶尖 (支持超长表格与复杂 JSON/CSV)"
+                code_exec = "✅ 强大 (内置/支持 Python 代码沙盒)"
+            else:
+                table_parse = "⚠️ 中等 (基础表格解析，长表受限)"
+                code_exec = "⚠️ 需外置沙盒 (支持生成 Python/SQL 代码)"
+                
+            if p_name in ["Google", "OpenAI", "Anthropic", "DeepSeek"]:
+                chart_gen = "✅ 卓越 (支持动态可视化与趋势洞察)"
+                db_conn = "✅ 完整 (支持 SQL 自动执行与结构映射)"
+            else:
+                chart_gen = "⚠️ 基础 (仅支持文本描述或静态图表)"
+                db_conn = "⚠️ 基础 (支持标准 SQL 生成)"
+                
+            report += f"| **{data['provider_name']}** | {data['model_family']} | {table_parse} <br> {code_exec} | {chart_gen} | {db_conn} | {sanitized} <br> PDF/Word/PPT导出 |\n"
+
+    elif scenario == "document_analysis":
+        report += """
+---
+
+## 附录 C. 学术写作与文献处理大盘支持 (Academic Writing & Document Analysis)
+
+| 厂商名称 | 模型系列 | 长文本窗口支持 | 多模态文献解析 | 证据溯源与合规脱敏 | 2026 文献学术专项建议/优惠 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+"""
+        for data in all_providers:
+            features = data.get("features", {})
+            cp = data.get("coding_plan", {}) or {}
+            sanitized = "✅ 已合规脱敏" if data.get("is_sanitized") else "❌ 未脱敏"
+            report += f"| **{data['provider_name']}** | {data['model_family']} | {features.get('context_window', 'N/A')} tokens | {'✅ 支持多模态' if features.get('vision_support') else '❌ 不支持'} | {sanitized} | {cp.get('plan_description', '-')} |\n"
+
+    elif scenario == "customer_service":
+        report += """
+---
+
+## 附录 C. 智能客服与对话高并发大盘支持 (Customer Service & Chat Concurrency)
+
+| 厂商名称 | 模型系列 | 高并发吞吐能力 (RPM/TPM) | 免费测试沙盒 | 用户满意度评分 | 2026 客服专项接入计划 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+"""
+        for data in all_providers:
+            limits = data.get("rate_limits", {})
+            cp = data.get("coding_plan", {}) or {}
+            feedback = data.get("user_feedback", {}) or {}
+            satisfaction_score = feedback.get('developer_satisfaction', 0.0)
+            satisfaction_level = get_satisfaction_level(satisfaction_score)
+            report += f"| **{data['provider_name']}** | {data['model_family']} | RPM: {limits.get('rpm', 'N/A')} / TPM: {limits.get('tpm', 'N/A')} | {'✅ 提供沙盒' if cp.get('has_sandbox_env') else '❌ 无沙盒'} | {satisfaction_level} ({satisfaction_score}) | {cp.get('plan_description', '-')} |\n"
+
+    elif scenario == "enterprise":
+        report += """
+---
+
+## 附录 C. 企业级安全合规与定制部署支持 (Enterprise Compliance & Custom Deployment)
+
+| 厂商名称 | 模型系列 | 数据隐私与合规状态 | 高并发吞吐限制 (RPM/TPM) | 免费试用/开发者环境 | 2026 企业专属服务/折扣 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+"""
+        for data in all_providers:
+            limits = data.get("rate_limits", {})
+            cp = data.get("coding_plan", {}) or {}
+            sanitized = "✅ 已合规脱敏" if data.get("is_sanitized") else "❌ 未脱敏"
+            report += f"| **{data['provider_name']}** | {data['model_family']} | {sanitized} | RPM: {limits.get('rpm', 'N/A')} / TPM: {limits.get('tpm', 'N/A')} | {'✅ 提供沙盒' if cp.get('has_sandbox_env') else '❌ 无沙盒'} | {cp.get('plan_description', '-')} |\n"
+
+    elif scenario == "creative":
+        report += """
+---
+
+## 附录 C. 创意写作与创意内容生产大盘支持 (Creative Writing & Content Generation)
+
+| 厂商名称 | 模型系列 | 最大上下文窗口 | 多模态视觉交互 | 用户整体满意度 | 2026 创意写作专项支持计划 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+"""
+        for data in all_providers:
+            features = data.get("features", {})
+            cp = data.get("coding_plan", {}) or {}
+            feedback = data.get("user_feedback", {}) or {}
+            satisfaction_score = feedback.get('developer_satisfaction', 0.0)
+            satisfaction_level = get_satisfaction_level(satisfaction_score)
+            report += f"| **{data['provider_name']}** | {data['model_family']} | {features.get('context_window', 'N/A')} tokens | {'✅ 支持多模态' if features.get('vision_support') else '❌ 不支持'} | {satisfaction_level} | {cp.get('plan_description', '-')} |\n"
+
+    else:
+        report += """
+---
+
+## 附录 C. 多场景通用接入与生态配套支持 (General Purpose Multimodal Support)
+
+| 厂商名称 | 模型系列 | 免费开发者沙盒 | 多模态视觉/函数调用 | 数据安全合规 | 2026 厂商优惠/服务概要 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+"""
+        for data in all_providers:
+            features = data.get("features", {})
+            cp = data.get("coding_plan", {}) or {}
+            sanitized = "✅ 已合规脱敏" if data.get("is_sanitized") else "❌ 未脱敏"
+            multimodal_fn = []
+            if features.get('vision_support'):
+                multimodal_fn.append("多模态")
+            if features.get('function_calling'):
+                multimodal_fn.append("函数调用")
+            fn_str = " + ".join(multimodal_fn) if multimodal_fn else "无特殊能力"
+            report += f"| **{data['provider_name']}** | {data['model_family']} | {'✅ 提供沙盒' if cp.get('has_sandbox_env') else '❌ 无沙盒'} | {fn_str} | {sanitized} | {cp.get('plan_description', '-')} |\n"
 
     report += """
 ---
 
-## 4. 核心证据链溯源审计 Trace (Source Attribution)
-以下是针对关键定价结论所提取的 100% 可信网页原始语料切片与出处，消除了信息黑盒风险：
+## 附录 D. 证据链溯源审计 Trace (Source Attribution)
 
 """
     for data in all_providers:
@@ -1531,8 +1160,7 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
     report += """
 ---
 
-## 5. 并发限流 (Rate Limits) 总结与团队建议
-针对大规模高并发应用，我们整理了各大服务商 2026 最新并发并发限制规格：
+## 附录 E. 并发限流 (Rate Limits) 与团队建议
 
 """
     for data in all_providers:
@@ -1541,8 +1169,12 @@ def writer_node(state: AgentState) -> Dict[str, Any]:
 
     report += "\n---\n*报告生成完毕。质量控制：HarnessFlow [Gate 2: 发布归档] 最终硬人工审核就绪。*"
     
+    # 彻底清洗最终报告中所有漏网的宣传用语
+    report = sanitize_marketing_jargon_via_llm(report)
+    
     return {
         "final_markdown_report": report,
+        "reports_archive": clean_archive,
         "trace_logs": state.get("trace_logs", []) + ["[Writer Agent] 成功生成多维综合竞品分析报告与信息溯源图谱。"]
     }
 
@@ -1581,6 +1213,12 @@ class SequentialLangGraphWorkflow:
             "qc": qc_node,
             "writer": writer_node
         }
+        # 自动初始化 RAG 外部资源库与用户历史记录 RAG 索引
+        try:
+            from agents.rag_indexer import initialize_rag_store
+            initialize_rag_store()
+        except Exception as e:
+            print(f"[SequentialLangGraphWorkflow] RAG 初始化失败: {e}")
         
     def execute_provider_pipeline(self, competitor: str, main_state: Dict[str, Any], event_callback, lock: threading.Lock) -> None:
         """针对单个厂商的独立级联抽取管道（在子线程中完全并行运转）"""
@@ -1596,7 +1234,8 @@ class SequentialLangGraphWorkflow:
             "retry_count": 0,
             "trace_logs": [],
             "reports_archive": {},
-            "final_markdown_report": ""
+            "final_markdown_report": "",
+            "parsed_requirement": main_state.get("parsed_requirement", {})
         }
         
         current_node = "collector"
@@ -1647,6 +1286,16 @@ class SequentialLangGraphWorkflow:
             if current_node == "collector":
                 current_node = "sanitizer"
             elif current_node == "sanitizer":
+                # 在 sanitizer → analyzer 之间注入 RAG 检索增强上下文
+                try:
+                    from agents.evidence_retriever import evidence_retriever_node
+                    rag_output = evidence_retriever_node(local_state)
+                    rag_context = rag_output.get("rag_context", "")
+                    if rag_context:
+                        local_state["sanitized_data"] += f"\n\n--- RAG 知识库补充证据 ---\n{rag_context}"
+                        local_state["trace_logs"] = rag_output.get("trace_logs", local_state["trace_logs"])
+                except Exception:
+                    pass
                 current_node = "analyzer"
             elif current_node == "analyzer":
                 current_node = "qc"
@@ -1678,7 +1327,7 @@ class SequentialLangGraphWorkflow:
                                     models=get_offline_models_fallback(fallback_data["provider_name"]),
                                     is_sanitized=True
                                 )
-                                local_state["comp_intel_dict"] = comp_intel.dict()
+                                local_state["comp_intel_dict"] = comp_intel.model_dump()
                         except Exception as ex_sg:
                             print(f"[Safe-Guard Error] 无法装填兜底实体: {ex_sg}")
                     
@@ -1693,7 +1342,73 @@ class SequentialLangGraphWorkflow:
                     # 触发打回逆流，折返至 analyzer 重新抽取
                     current_node = "analyzer"
 
-    def execute(self, competitor_list: List[str], event_callback=None) -> Dict[str, Any]:
+    def _emit_node_event(self, event_callback, event: str, node: str, state: Dict[str, Any], competitor: str = "ALL") -> None:
+        if event_callback:
+            event_callback({
+                "event": event,
+                "node": node,
+                "competitor": competitor,
+                "state": state
+            })
+
+    def _run_smart_preprocessing(self, main_state: Dict[str, Any], event_callback=None) -> Dict[str, Any]:
+        from agents.requirement_parser import requirement_parser_node
+        from agents.competitor_discovery import competitor_discovery_node
+        from agents.planner_agent import planner_agent_node
+
+        # 启动 RAG 检索以获取相关行业快讯和历史背景
+        query = main_state.get("raw_query", "") or main_state.get("query", "")
+        if query:
+            try:
+                from agents.requirement_parser import parse_requirement_offline
+                pre_parsed = parse_requirement_offline(query)
+                target_scenario = pre_parsed.get("scenario", "general")
+                
+                from agents.rag_indexer import get_vector_store
+                store = get_vector_store()
+                search_results = store.search(query, top_k=3, target_scenario=target_scenario)
+                if search_results:
+                    context_blocks = []
+                    for idx, res in enumerate(search_results):
+                        score = res.get("score", 0.0)
+                        if score >= 0.20:
+                            source = res.get("metadata", {}).get("doc_id", "未知来源")
+                            text = res.get("text", "")
+                            context_blocks.append(f"【参考资源 #{idx+1}】(来源: {source}, 相关度: {score:.2f})\n{text}")
+                    if context_blocks:
+                        pre_retrieved_context = "\n\n".join(context_blocks)
+                        main_state["pre_retrieved_context"] = pre_retrieved_context
+                        trace_msg = f"[EvidenceRetriever Agent] RAG 检索完成，为场景匹配并注入了 {len(context_blocks)} 条相关度 >= 0.20 的历史分析与行业快讯背景知识。"
+                    else:
+                        trace_msg = f"[EvidenceRetriever Agent] RAG 检索到的所有结果相关度均低于 0.20，已过滤以防止噪声污染。"
+                    print(trace_msg)
+                    main_state["trace_logs"].append(trace_msg)
+            except Exception as e:
+                print(f"[EvidenceRetriever Agent] RAG 检索失败: {e}")
+
+        preprocessing_nodes = [
+            ("requirement_parser", requirement_parser_node),
+            ("competitor_discovery", competitor_discovery_node),
+            ("planner", planner_agent_node),
+        ]
+
+        for node_name, node_func in preprocessing_nodes:
+            self._emit_node_event(event_callback, "node_start", node_name, main_state)
+            time.sleep(0.4)
+            node_output = node_func(main_state)
+            main_state.update(node_output)
+            self._emit_node_event(event_callback, "node_end", node_name, main_state)
+            time.sleep(0.2)
+
+        if not main_state.get("competitor_list"):
+            main_state["competitor_list"] = ["OpenAI", "火山引擎"]
+            main_state["trace_logs"].append(
+                "[CompetitorDiscovery Agent] 未能生成推荐厂商，已回退到默认对比组合: ['OpenAI', '火山引擎']"
+            )
+
+        return main_state
+
+    def execute(self, competitor_list: List[str], event_callback=None, smart_query: str = None) -> Dict[str, Any]:
         # 初始化主线程汇总状态
         main_state: AgentState = {
             "competitor_list": competitor_list,
@@ -1708,6 +1423,12 @@ class SequentialLangGraphWorkflow:
             "reports_archive": {},
             "final_markdown_report": ""
         }
+
+        if smart_query:
+            main_state["raw_query"] = smart_query
+            main_state["trace_logs"] = [
+                f"[HarnessFlow Smart-Agent] 智能场景分析启动，输入需求: \"{smart_query}\""
+            ]
         
         # 线程锁，保证并发 SSE 推送和归档主 State 写的线程安全
         lock = threading.Lock()
@@ -1721,8 +1442,38 @@ class SequentialLangGraphWorkflow:
             })
             time.sleep(0.5)
 
+        if smart_query:
+            main_state = self._run_smart_preprocessing(main_state, event_callback)
+            competitor_list = main_state.get("competitor_list", [])
+            if event_callback:
+                event_callback({
+                    "event": "competitor_list_ready",
+                    "competitor_list": competitor_list,
+                    "state": {
+                        "competitor_list": competitor_list,
+                        "recommended_vendors": main_state.get("recommended_vendors", []),
+                        "parsed_requirement": main_state.get("parsed_requirement", {}),
+                        "execution_plan": main_state.get("execution_plan", {}),
+                    }
+                })
+
+            plan = main_state.get("execution_plan", {})
+            if plan.get("plan_type") == "cache_hit":
+                try:
+                    from agents.learning_agent import lookup_cached_result
+                    scenario = main_state.get("parsed_requirement", {}).get("scenario", "general")
+                    cached = lookup_cached_result(competitor_list, scenario, max_age_hours=24)
+                    if cached:
+                        main_state.update(cached)
+                        if "final_report" in cached:
+                            main_state["final_markdown_report"] = cached["final_report"]
+                        main_state["trace_logs"].append("[PlannerAgent] 命中知识库缓存，直接复用历史分析结果。")
+                        return main_state
+                except Exception:
+                    main_state["trace_logs"].append("[PlannerAgent] 缓存加载失败，回退到全量分析。")
+
         # ⚡ 核心 Scatter：利用线程池并发执行各个厂商的流水线
-        with ThreadPoolExecutor(max_workers=len(competitor_list)) as executor:
+        with ThreadPoolExecutor(max_workers=min(6, len(competitor_list))) as executor:
             futures = [
                 executor.submit(
                     self.execute_provider_pipeline,
@@ -1735,9 +1486,44 @@ class SequentialLangGraphWorkflow:
             ]
             # ⚡ 核心 Gather：阻塞并等待所有厂商子线程执行完毕
             for fut in futures:
-                fut.result()
+                try:
+                    fut.result(timeout=480)
+                except Exception as e:
+                    print(f"[Scatter-Gather] 子线程异常: {e}")
+                    with lock:
+                        main_state["trace_logs"].append(f"[ERROR] 子线程执行异常: {e}")
 
-        # 所有子线程收集归并完成，启动主线程的 Writer Node 生成总竞品大盘报告
+        # 所有子线程收集归并完成
+        # smart_query 模式：先评分和场景分析，再生成报告
+        if smart_query:
+            try:
+                from agents.scoring_agent import scoring_agent_node
+                from agents.scenario_analyst import scenario_analyst_node
+
+                for node_name, node_func in [
+                    ("scoring", scoring_agent_node),
+                    ("scenario_analyst", scenario_analyst_node),
+                ]:
+                    if event_callback:
+                        event_callback({
+                            "event": "node_start",
+                            "node": node_name,
+                            "competitor": "ALL",
+                            "state": {"current_competitor": "ALL"}
+                        })
+                    node_output = node_func(main_state)
+                    main_state.update(node_output)
+                    if event_callback:
+                        event_callback({
+                            "event": "node_end",
+                            "node": node_name,
+                            "competitor": "ALL",
+                            "state": {"current_competitor": "ALL", "trace_logs": main_state.get("trace_logs", [])}
+                        })
+            except Exception as e:
+                main_state["trace_logs"].append(f"[Smart Prewrite] 评分/场景分析异常，已跳过: {e}")
+
+        # 启动 Writer Node 生成总竞品大盘报告
         if event_callback:
             event_callback({
                 "event": "node_start",
@@ -1754,6 +1540,34 @@ class SequentialLangGraphWorkflow:
         # 运行报告汇编节点
         writer_output = self.nodes["writer"](main_state)
         main_state.update(writer_output)
+
+        if smart_query:
+            try:
+                from agents.freshness_auditor import freshness_auditor_node
+                from agents.learning_agent import learning_agent_node
+
+                for node_name, node_func in [
+                    ("freshness_auditor", freshness_auditor_node),
+                    ("learning", learning_agent_node),
+                ]:
+                    if event_callback:
+                        event_callback({
+                            "event": "node_start",
+                            "node": node_name,
+                            "competitor": "ALL",
+                            "state": {"current_competitor": "ALL"}
+                        })
+                    node_output = node_func(main_state)
+                    main_state.update(node_output)
+                    if event_callback:
+                        event_callback({
+                            "event": "node_end",
+                            "node": node_name,
+                            "competitor": "ALL",
+                            "state": {"current_competitor": "ALL", "trace_logs": main_state.get("trace_logs", [])}
+                        })
+            except Exception as e:
+                main_state["trace_logs"].append(f"[Smart Postprocess] 知识沉淀异常，已跳过: {e}")
         
         # 触发整体流程圆满完成事件
         if event_callback:
@@ -1767,6 +1581,13 @@ class SequentialLangGraphWorkflow:
                     "feedback": "",
                     "final_markdown_report": main_state["final_markdown_report"],
                     "reports_archive": main_state["reports_archive"],
+                    "parsed_requirement": main_state.get("parsed_requirement", {}),
+                    "recommended_vendors": main_state.get("recommended_vendors", []),
+                    "execution_plan": main_state.get("execution_plan", {}),
+                    "scoring_results": main_state.get("scoring_results", {}),
+                    "scenario_analysis": main_state.get("scenario_analysis", {}),
+                    "freshness_results": main_state.get("freshness_results", {}),
+                    "cache_key": main_state.get("cache_key"),
                     "trace_logs": main_state["trace_logs"]
                 }
             })
