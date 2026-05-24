@@ -1,0 +1,3677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HarnessFlow 2026 LLM API 全球厂商并行分析控制大盘</title>
+    <!-- 引入致敬 Google & Apple 极简科技美学的 Google Sans 替代字体 Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        html {
+            font-size: 16px; /* 恢复为极致精巧的高级科技美学基础字号，保障完美呼吸感与屏效比 */
+        }
+
+        /* ==========================================
+         * 1. 致敬 Google & Apple 极简与呼吸感设计系统
+         * ========================================== */
+        :root {
+            /* 浅色高质感配色 (Inspired by Apple HIG & Google Material) */
+            --bg-color: #f5f5f7; /* 经典苹果浅灰背景 */
+            --card-bg: #ffffff;  /* 纯白卡片 */
+            --card-border: rgba(0, 0, 0, 0.06); /* 极致精细边框 */
+            --text-primary: #1d1d1f; /* 曜石黑 */
+            --text-secondary: #86868b; /* 苹果副标题灰 */
+            --apple-blue: #0071e3; /* 苹果系统深蓝 */
+            --google-blue: #1a73e8; /* 谷歌科技蓝 */
+            --google-green: #34c759; /* 苹果草木绿 / 谷歌绿色 */
+            --color-collector: #0071e3;
+            --color-sanitizer: #34c759;
+            --color-analyzer: #f5a623;
+            --color-qc: #ff453a; /* 温润苹果橙红 */
+            --color-qc-ok: #34c759;
+            --color-writer: #bf5af2; /* 苹果粉紫 */
+            --font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f5f7 0%, #eef2f6 100%);
+            color: var(--text-primary);
+            font-family: var(--font-family);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            letter-spacing: -0.015em;
+        }
+
+        /* 极细滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.08);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.16);
+        }
+
+        /* ==========================================
+         * 2. Header 导航与版头 (极简白纸质感)
+         * ========================================== */
+        header {
+            padding: 1.25rem 3rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--card-border);
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: saturate(180%) blur(20px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-badge {
+            background-color: var(--text-primary);
+            color: #ffffff;
+            font-weight: 700;
+            padding: 0.35rem 0.7rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+        }
+
+        .logo-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .status-badge-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .dot-indicator {
+            width: 7px;
+            height: 7px;
+            background-color: #34c759;
+            border-radius: 50%;
+            box-shadow: 0 0 6px rgba(52, 199, 89, 0.4);
+            animation: pulse-dot 2.5s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.6; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* ==========================================
+         * 3. 布局面板与高雅卡片 (致敬 Apple HIG & Material You)
+         * ========================================== */
+        main {
+            flex: 1;
+            max-width: 1750px; /* 大幅拓宽容器，解决看起来太窄的问题 */
+            width: 95%; /* 适配更宽的大屏显示 */
+            margin: 0 auto;
+            padding: 2.5rem 2rem; /* 适当缩减两侧边距，给予卡片更多呼吸空间 */
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .row {
+            display: flex;
+            gap: 2rem;
+            width: 100%;
+        }
+
+        .col-left {
+            flex: 3;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .col-right {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 温润微阴影白卡片 */
+        .glass-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 18px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.04);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.06);
+            border-color: rgba(0,0,0,0.1);
+        }
+
+        .panel-title {
+            font-size: 1.2rem; /* 放大面板标题 */
+            font-weight: 600;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-primary);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+            padding-bottom: 0.75rem;
+        }
+
+        /* ==========================================
+         * 4. 竞品配置与扁平交互按钮
+         * ========================================== */
+        .config-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .competitor-checkbox {
+            position: relative;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            background: #f5f5f7;
+            border: 1px solid transparent;
+            padding: 0.75rem 1.35rem; /* 增加呼吸边距，看起来更加高级 */
+            border-radius: 10px;
+            font-size: 1.05rem; /* 进一步增大字号，显著提高易读性 */
+            font-weight: 500;
+            transition: all 0.2s ease;
+            user-select: none;
+            color: var(--text-primary);
+        }
+
+        .competitor-checkbox input {
+            display: none;
+        }
+
+        .checkbox-custom {
+            width: 15px;
+            height: 15px;
+            border: 1.5px solid #d2d2d7;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            background: #ffffff;
+        }
+
+        .checkbox-custom::after {
+            content: "✓";
+            color: #ffffff;
+            font-size: 0.7rem;
+            font-weight: 700;
+            display: none;
+        }
+
+        .competitor-checkbox input:checked + .checkbox-custom {
+            background-color: var(--apple-blue);
+            border-color: var(--apple-blue);
+        }
+
+        .competitor-checkbox input:checked + .checkbox-custom::after {
+            display: block;
+        }
+
+        .competitor-checkbox:hover {
+            background: #e8e8ed;
+        }
+
+        .competitor-checkbox.checked {
+            background: rgba(0, 113, 227, 0.05);
+            border-color: rgba(0, 113, 227, 0.2);
+            color: var(--apple-blue);
+        }
+
+        /* Apple 标志性高质感按钮 */
+        .action-btn {
+            background: var(--apple-blue);
+            color: #ffffff;
+            border: none;
+            padding: 0.8rem 2.2rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.2);
+            align-self: flex-start;
+        }
+
+        .action-btn:hover {
+            background: #0077ed;
+            transform: scale(1.015);
+            box-shadow: 0 6px 16px rgba(0, 113, 227, 0.3);
+        }
+
+        .action-btn:active {
+            transform: scale(0.985);
+        }
+
+        .action-btn:disabled {
+            background: #e8e8ed;
+            color: #a1a1a6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* ==========================================
+         * 5. ⚡ 实时并发任务状态监控网格样式
+         * ========================================== */
+        .parallel-monitor-card {
+            border: 1px solid rgba(0, 113, 227, 0.15);
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+        }
+
+        .monitor-row {
+            background: #fafafa;
+            border: 1px solid rgba(0, 0, 0, 0.03);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .monitor-row:hover {
+            background: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+            border-color: rgba(0, 113, 227, 0.1);
+        }
+
+        .monitor-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .monitor-name {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .monitor-model {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            background: #e8e8ed;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .monitor-steps {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-top: 0.25rem;
+        }
+
+        .m-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #d2d2d7;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .m-dot.active {
+            background-color: #f5a623;
+            box-shadow: 0 0 6px #f5a623;
+            animation: pulse-mdot 1s infinite alternate;
+        }
+
+        .m-dot.completed {
+            background-color: var(--google-green);
+        }
+
+        .m-dot.failed {
+            background-color: var(--color-qc);
+            box-shadow: 0 0 6px var(--color-qc);
+        }
+
+        .m-step-text {
+            color: var(--text-secondary);
+        }
+
+        .m-step-text.active {
+            color: var(--apple-blue);
+            font-weight: 600;
+        }
+
+        .m-step-text.completed {
+            color: #137333;
+        }
+
+        .m-step-text.failed {
+            color: var(--color-qc);
+            font-weight: 600;
+        }
+
+        @keyframes pulse-mdot {
+            from { transform: scale(1); opacity: 0.7; }
+            to { transform: scale(1.3); opacity: 1; }
+        }
+
+        /* ==========================================
+         * 6. 极致精细的原生 SVG 流程拓扑大盘
+         * ========================================== */
+        .dag-container {
+            width: 100%;
+            height: 230px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #fafafa;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.04);
+            overflow: hidden;
+            position: relative;
+        }
+
+        svg.dag-view {
+            width: 800px;
+            height: 210px;
+        }
+
+        .agent-node {
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .node-rect {
+            fill: #ffffff;
+            stroke: #d2d2d7;
+            stroke-width: 1.5px;
+            rx: 12;
+            ry: 12;
+            transition: all 0.3s ease;
+        }
+
+        .node-label {
+            fill: var(--text-primary);
+            font-size: 13px;
+            font-weight: 600;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            transition: all 0.3s ease;
+        }
+
+        .node-desc {
+            fill: var(--text-secondary);
+            font-size: 10px;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+
+        .agent-node.active .node-rect {
+            stroke-width: 2.5px;
+            stroke: currentColor;
+            fill: rgba(0, 113, 227, 0.02);
+            filter: drop-shadow(0px 4px 10px rgba(0, 0, 0, 0.06));
+            animation: pulse-node 2s infinite alternate;
+        }
+        .agent-node.active .node-label {
+            fill: var(--apple-blue) !important;
+            font-weight: 700;
+        }
+
+        .agent-node.completed .node-rect {
+            fill: rgba(52, 199, 89, 0.03);
+            stroke: var(--google-green);
+            stroke-width: 1.5px;
+        }
+        .agent-node.completed .node-label {
+            fill: #137333;
+        }
+
+        .agent-node.failed .node-rect {
+            fill: rgba(255, 69, 58, 0.04);
+            stroke: var(--color-qc);
+            stroke-width: 2.5px;
+            animation: shake 0.5s ease;
+        }
+        .agent-node.failed .node-label {
+            fill: var(--color-qc);
+            font-weight: 700;
+        }
+
+        .node-collector.active { color: var(--color-collector); }
+        .node-sanitizer.active { color: var(--color-sanitizer); }
+        .node-analyzer.active { color: var(--color-analyzer); }
+        .node-qc.active { color: var(--color-qc); }
+        .node-writer.active { color: var(--color-writer); }
+
+        .edge-path {
+            fill: none;
+            stroke: #e5e5ea;
+            stroke-width: 2px;
+            stroke-dasharray: 4,4;
+            transition: all 0.3s ease;
+        }
+
+        .edge-path.active {
+            stroke: var(--apple-blue);
+            stroke-width: 2.5px;
+            stroke-dasharray: none;
+            animation: flow-path 12s linear infinite;
+        }
+
+        .edge-path.qc-reject {
+            stroke: var(--color-qc);
+            stroke-width: 2px;
+            stroke-dasharray: 4,4;
+            animation: flow-reverse 3s linear infinite;
+        }
+
+        @keyframes flow-path {
+            from { stroke-dashoffset: 150; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        @keyframes flow-reverse {
+            from { stroke-dashoffset: 0; }
+            to { stroke-dashoffset: 80; }
+        }
+
+        @keyframes pulse-node {
+            0% { stroke-width: 2px; }
+            100% { stroke-width: 3.5px; }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-4px); }
+            40%, 80% { transform: translateX(4px); }
+        }
+
+        /* ==========================================
+         * 7. 可观测 Trace 终端大盘 (致敬 Xcode & Chrome Inspector)
+         * ========================================== */
+        .console-container {
+            display: flex;
+            flex-direction: column;
+            height: 550px; /* 增加终端高度 */
+            background: #fafafa;
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Mono", Consolas, monospace;
+        }
+
+        .console-header {
+            background: #ffffff;
+            padding: 0.65rem 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--card-border);
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .console-dots {
+            display: flex;
+            gap: 6px;
+        }
+
+        .c-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .c-dot-red { background: #ff5f56; }
+        .c-dot-yellow { background: #ffbd2e; }
+        .c-dot-green { background: #27c93f; }
+
+        .console-body {
+            flex: 1;
+            padding: 1.25rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            font-size: 0.96rem; /* 进一步提升终端日志字号 */
+            line-height: 1.6;
+        }
+
+        .log-entry {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+            animation: fadeInLog 0.2s ease forwards;
+        }
+
+        @keyframes fadeInLog {
+            from { opacity: 0; transform: translateY(3px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .log-time {
+            color: #a1a1a6;
+            user-select: none;
+            font-size: 0.78rem;
+        }
+
+        .log-tag {
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-size: 0.72rem;
+            letter-spacing: 0.3px;
+        }
+
+        .log-tag.system { background: #e8e8ed; color: var(--text-primary); }
+        .log-tag.collector { background: rgba(0, 113, 227, 0.08); color: var(--color-collector); }
+        .log-tag.sanitizer { background: rgba(52, 199, 89, 0.08); color: #137333; }
+        .log-tag.analyzer { background: rgba(245, 166, 35, 0.08); color: #b06000; }
+        .log-tag.qc { background: rgba(255, 69, 58, 0.08); color: var(--color-qc); }
+        .log-tag.qc-ok { background: rgba(52, 199, 89, 0.08); color: #137333; }
+        .log-tag.writer { background: rgba(191, 90, 242, 0.08); color: #7d12b3; }
+
+        .log-text {
+            color: var(--text-primary);
+        }
+
+        /* Apple 优雅的错误警告横幅 */
+        .qc-alert-banner {
+            background: rgba(255, 69, 58, 0.05);
+            border-left: 3px solid var(--color-qc);
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            margin-top: 0.4rem;
+            animation: slideIn 0.25s ease-out;
+            font-size: 0.9rem;
+            color: #d71919;
+            font-weight: 500;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-6px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* ==========================================
+         * 8. 最终竞品分析报告 (极简科技白纸质感)
+         * ========================================== */
+        .report-section {
+            width: 100%;
+        }
+
+        .report-content {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 1.5rem 0.5rem;
+            color: var(--text-primary);
+            line-height: 1.75;
+            font-size: 1.25rem; /* 大幅增大报告正文字号 */
+        }
+
+        .report-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 1.02rem; /* 放大表格内字号 */
+        }
+
+        .report-content th {
+            background: #f5f5f7;
+            color: var(--text-primary);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+            font-size: 1.02rem;
+        }
+
+        .report-content td {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+            transition: background 0.15s ease;
+        }
+
+        .report-content tr:hover td {
+            background: #fafafa;
+        }
+
+        .report-content h1, .report-content h2, .report-content h3 {
+            color: var(--text-primary);
+            margin-top: 2.2rem;
+            margin-bottom: 1.1rem;
+            font-weight: 700;
+        }
+
+        .report-content h1 {
+            font-size: 1.65rem; /* 增大一级标题 */
+            letter-spacing: -0.02em;
+            border-bottom: 1.5px solid var(--text-primary);
+            padding-bottom: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .report-content h2 {
+            font-size: 1.35rem; /* 增大二级标题 */
+            border-left: 4px solid var(--apple-blue); /* 增粗指示线 */
+            padding-left: 0.75rem;
+            letter-spacing: -0.01em;
+        }
+
+        .report-content h3 {
+            font-size: 1.1rem; /* 增大三级标题 */
+            color: var(--text-secondary);
+        }
+
+        .report-content blockquote {
+            background: #f5f5f7;
+            border-left: 3.5px solid var(--text-primary);
+            padding: 0.75rem 1.25rem;
+            margin: 1.25rem 0;
+            border-radius: 0 6px 6px 0;
+            font-style: italic;
+            color: #515154;
+        }
+
+        .report-content ul {
+            padding-left: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .report-content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .source-trace-link {
+            color: var(--apple-blue);
+            text-decoration: none;
+            border-bottom: 1px dashed var(--apple-blue);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .source-trace-link:hover {
+            color: #ffffff;
+            background: var(--apple-blue);
+            border-bottom-style: solid;
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
+
+        .trace-tooltip {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            max-width: 320px;
+            font-size: 0.78rem;
+            color: var(--text-primary);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            backdrop-filter: blur(25px);
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .trace-tooltip.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .tooltip-header {
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.4rem;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            padding-bottom: 0.25rem;
+            font-size: 0.82rem;
+        }
+
+        .tooltip-snippet {
+            font-style: italic;
+            color: #515154;
+            margin-bottom: 0.40rem;
+            background: #f5f5f7;
+            padding: 0.4rem;
+            border-radius: 4px;
+        }
+
+        .tooltip-source {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        /* ==========================================
+         * 9. Phase 1-4 附加高级设计组件 (Apple HIG)
+         * ========================================== */
+        /* UI Tabs 样式 */
+        .tabs-header {
+            display: flex;
+            background: #e8e8ed;
+            padding: 4px;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            gap: 4px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 0.6rem 1rem;
+            border-radius: 9px;
+            font-size: 1.02rem; /* 增大 Tab 按钮字号 */
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .tab-btn.active {
+            background: #ffffff;
+            color: var(--text-primary);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .tab-pane {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .tab-pane.hidden {
+            display: none !important;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 智能搜索文本框 */
+        .smart-search-box {
+            width: 100%;
+            height: 100px;
+            background: #fafafa;
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            font-family: var(--font-family);
+            font-size: 1.1rem; /* 显著提升输入框文字字号 */
+            color: var(--text-primary);
+            resize: none;
+            outline: none;
+            transition: all 0.2s ease;
+            margin-bottom: 1rem;
+        }
+
+        .smart-search-box:focus {
+            background: #ffffff;
+            border-color: var(--apple-blue);
+            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
+        }
+
+        /* RAG 拖拽上传区域 */
+        .upload-drag-zone {
+            border: 2px dashed #d2d2d7;
+            border-radius: 12px;
+            padding: 1.5rem 1rem;
+            text-align: center;
+            cursor: pointer;
+            background: #fafafa;
+            transition: all 0.25s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+            margin-bottom: 1rem;
+        }
+
+        .upload-drag-zone:hover, .upload-drag-zone.dragover {
+            border-color: var(--apple-blue);
+            background: rgba(0, 113, 227, 0.02);
+            color: var(--apple-blue);
+        }
+
+        .upload-file-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .upload-file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fafafa;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+        }
+
+        .upload-file-item .file-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 250px;
+        }
+
+        .upload-file-item .file-status {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--google-green);
+        }
+
+        /* 满意度反馈挂件 */
+        .feedback-container {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: #f5f5f7;
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .feedback-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .rating-stars {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 1rem;
+        }
+
+        .star-icon {
+            font-size: 1.5rem;
+            color: #d2d2d7;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .star-icon.active {
+            color: #ff9f0a; /* 苹果深金橙 */
+            transform: scale(1.1);
+        }
+
+        .star-icon:hover {
+            transform: scale(1.15);
+        }
+
+        .feedback-textarea {
+            width: 100%;
+            height: 60px;
+            border: 1px solid var(--card-border);
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.85rem;
+            resize: none;
+            outline: none;
+            margin-bottom: 0.75rem;
+        }
+
+        .feedback-textarea:focus {
+            border-color: var(--apple-blue);
+        }
+
+        .feedback-submit-btn {
+            background: var(--text-primary);
+            color: #ffffff;
+            border: none;
+            padding: 0.5rem 1.25rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .feedback-submit-btn:hover {
+            background: #333333;
+        }
+
+        /* 历史知识库卡片 */
+        .history-card {
+            margin-top: 1.5rem;
+            max-height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            overflow-y: auto;
+            max-height: 300px;
+            padding-right: 2px;
+        }
+
+        .history-item {
+            background: #fafafa;
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .history-item:hover {
+            background: #ffffff;
+            border-color: rgba(0, 113, 227, 0.2);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+            transform: translateY(-1px);
+        }
+
+        .history-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-scenario {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .history-time {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .history-vendors {
+            font-size: 0.74rem;
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .history-vendors span {
+            background: rgba(0, 113, 227, 0.04);
+            border: 1px solid rgba(0, 113, 227, 0.08);
+            color: var(--apple-blue);
+            padding: 1px 4px;
+            border-radius: 4px;
+            margin-right: 3px;
+            font-size: 0.7rem;
+        }
+
+        /* 徽章 Badge 样式修正 */
+        .freshness-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.78rem;
+        }
+        .freshness-badge.green { background: rgba(52, 199, 89, 0.1); color: #137333; }
+        .freshness-badge.blue { background: rgba(0, 113, 227, 0.1); color: var(--apple-blue); }
+        .freshness-badge.yellow { background: rgba(245, 166, 35, 0.1); color: #b06000; }
+        .freshness-badge.red { background: rgba(255, 69, 58, 0.1); color: #d71919; }
+
+        /* 新节点颜色 */
+        .node-requirement_parser.active { color: #30b0c7; }
+        .node-competitor_discovery.active { color: #ff9f0a; }
+        .node-planner.active { color: #5856d6; }
+
+        /* ==========================================
+         * 10. Apple HIG Glassmorphism Toast Component
+         * ========================================== */
+        .toast-container {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px) saturate(190%);
+            -webkit-backdrop-filter: blur(20px) saturate(190%);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            color: var(--text-primary);
+            padding: 0.85rem 1.5rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 320px;
+            max-width: 480px;
+            opacity: 0;
+            transform: translateY(-20px) scale(0.95);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: auto;
+            letter-spacing: -0.01em;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .toast-success { border-left: 4.5px solid var(--google-green); }
+        .toast-error { border-left: 4.5px solid var(--color-qc); }
+        .toast-warning { border-left: 4.5px solid var(--color-analyzer); }
+        .toast-info { border-left: 4.5px solid var(--apple-blue); }
+
+        .toast-icon {
+            font-size: 1.15rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .toast-message {
+            flex: 1;
+            line-height: 1.4;
+        }
+
+        /* Input lockout state style */
+        .disabled-element {
+            opacity: 0.55 !important;
+            pointer-events: none !important;
+            cursor: not-allowed !important;
+            filter: grayscale(30%);
+            transition: all 0.3s ease;
+        }
+
+        /* Pulsing button gradient visual execution indicator */
+        .action-btn.processing {
+            background: linear-gradient(90deg, var(--apple-blue), var(--color-writer), var(--apple-blue));
+            background-size: 200% auto;
+            animation: pulse-gradient 1.8s linear infinite;
+            box-shadow: 0 0 18px rgba(191, 90, 242, 0.4);
+            pointer-events: none;
+        }
+
+        @keyframes pulse-gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* ==========================================
+         * 11. Interactive Neural Thinking dashboard styling
+         * ========================================== */
+        .thinking-container {
+            background: #ffffff;
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 2.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.8rem;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.03);
+            animation: fadeIn 0.45s ease;
+        }
+
+        .thinking-header {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+            padding-bottom: 1.25rem;
+        }
+
+        .thinking-brain-wrapper {
+            width: 66px;
+            height: 66px;
+            background: rgba(0, 113, 227, 0.06);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 0 12px rgba(0, 113, 227, 0.1);
+        }
+
+        .thinking-brain-svg {
+            width: 48px;
+            height: 48px;
+        }
+
+        .brain-center {
+            fill: var(--apple-blue);
+            animation: brain-pulse 2s infinite ease-in-out;
+        }
+
+        .brain-node {
+            fill: #d2d2d7;
+            transition: all 0.4s ease;
+        }
+
+        .brain-link {
+            stroke: #e5e5ea;
+            stroke-width: 1.5px;
+            stroke-dasharray: 4,4;
+            animation: brain-dash 12s linear infinite;
+        }
+
+        .thinking-title-block {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .thinking-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.015em;
+        }
+
+        .thinking-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .thinking-agents-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.85rem;
+        }
+
+        .thinking-agent-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.9rem 1.25rem;
+            border-radius: 12px;
+            background: #fafafa;
+            border: 1px solid rgba(0, 0, 0, 0.02);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .thinking-agent-item.active {
+            background: rgba(0, 113, 227, 0.04);
+            border-color: rgba(0, 113, 227, 0.18);
+            box-shadow: 0 4px 14px rgba(0, 113, 227, 0.05);
+            transform: translateX(4px);
+        }
+
+        .thinking-agent-item.completed {
+            background: rgba(52, 199, 89, 0.03);
+            border-color: rgba(52, 199, 89, 0.15);
+        }
+
+        .thinking-agent-item.failed {
+            background: rgba(255, 69, 58, 0.03);
+            border-color: rgba(255, 69, 58, 0.15);
+        }
+
+        .think-agent-status {
+            font-size: 1.15rem;
+            width: 24px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .think-agent-name {
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            width: 280px;
+            flex-shrink: 0;
+        }
+
+        .think-agent-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            flex: 1;
+        }
+
+        @keyframes brain-pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 1; filter: drop-shadow(0 0 6px rgba(0, 113, 227, 0.5)); }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+
+        @keyframes brain-dash {
+            to { stroke-dashoffset: -120; }
+        }
+
+        /* ==========================================
+         * 🌟 Apple Segmented Page Switcher Navigation Style
+         * ========================================== */
+        .global-nav {
+            display: flex;
+            background: rgba(0, 0, 0, 0.04);
+            padding: 4px;
+            border-radius: 99px;
+            gap: 4px;
+            position: relative;
+            user-select: none;
+            border: 1px solid rgba(0, 0, 0, 0.02);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            align-items: center;
+        }
+
+        .nav-tab {
+            background: transparent;
+            border: none;
+            outline: none;
+            padding: 8px 24px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-radius: 99px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .nav-tab:hover {
+            color: var(--text-primary);
+            background: rgba(0, 0, 0, 0.03);
+        }
+
+        .nav-tab.active {
+            color: var(--apple-blue);
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+
+        /* 隐藏页面的全局样式 */
+        .hidden-page {
+            display: none !important;
+        }
+
+        .trace-card, table, blockquote {
+            will-change: transform, opacity;
+        }
+
+        /* ==========================================================================
+           HarnessFlow - Agent Trace & Timeline Glassmorphism CSS (New Additions)
+           ========================================================================== */
+        #row-console {
+            align-items: flex-start;
+        }
+
+        .col-input, .col-trace, .col-report-preview {
+            min-height: 720px;
+            height: calc(100vh - 160px);
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        /* 滚动条精致美化 */
+        .col-input::-webkit-scrollbar,
+        .col-trace::-webkit-scrollbar,
+        .col-report-preview::-webkit-scrollbar,
+        #trace-timeline-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .col-input::-webkit-scrollbar-thumb,
+        .col-trace::-webkit-scrollbar-thumb,
+        .col-report-preview::-webkit-scrollbar-thumb,
+        #trace-timeline-container::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 3px;
+        }
+
+        /* Agent Trace Card */
+        .trace-card {
+            background: rgba(255, 255, 255, 0.55);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 0.25rem;
+        }
+
+        .trace-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+        }
+
+        .trace-card.active {
+            border-left: 4px solid var(--apple-blue);
+            background: rgba(0, 113, 227, 0.03);
+            box-shadow: 0 4px 20px rgba(0, 113, 227, 0.08);
+        }
+
+        .trace-card.completed {
+            border-left: 4px solid #34c759;
+            background: rgba(52, 199, 89, 0.02);
+        }
+
+        .trace-card.failed {
+            border-left: 4px solid #ff3b30;
+            background: rgba(255, 59, 48, 0.03);
+            box-shadow: 0 4px 20px rgba(255, 59, 48, 0.08);
+        }
+
+        /* Card Header */
+        .trace-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+            padding-bottom: 0.5rem;
+        }
+
+        .trace-card-title {
+            font-weight: 600;
+            font-size: 0.88rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .trace-card-badge {
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .trace-card-badge.waiting {
+            background: #e5e5ea;
+            color: #8e8e93;
+        }
+
+        .trace-card-badge.running {
+            background: rgba(0, 113, 227, 0.15);
+            color: var(--apple-blue);
+            animation: text-pulse 1.5s infinite alternate;
+        }
+
+        .trace-card-badge.success {
+            background: rgba(52, 199, 89, 0.15);
+            color: #1f8242;
+        }
+
+        .trace-card-badge.failed {
+            background: rgba(255, 59, 48, 0.15);
+            color: #d11a2a;
+        }
+
+        .trace-card-badge.retry {
+            background: rgba(255, 149, 0, 0.15);
+            color: #b25d00;
+        }
+
+        /* Card Summary Blocks */
+        .trace-card-io {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+        }
+
+        .io-block {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 0.45rem;
+            background: rgba(0, 0, 0, 0.02);
+            border-radius: 6px;
+            border: 1px solid rgba(0, 0, 0, 0.01);
+        }
+
+        .io-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .io-text {
+            font-size: 0.78rem;
+            color: #333333;
+            line-height: 1.35;
+        }
+
+        /* QA Alert Horizontal Ribbon */
+        .qa-alert-ribbon {
+            background: rgba(255, 59, 48, 0.08);
+            border: 1px dashed rgba(255, 59, 48, 0.25);
+            border-radius: 6px;
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            color: #d11a2a;
+            line-height: 1.4;
+            margin-top: 0.25rem;
+        }
+
+        /* Trace Logs Collapsible Console */
+        .trace-logs-toggle {
+            background: none;
+            border: none;
+            color: var(--apple-blue);
+            font-size: 0.72rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0;
+            margin-top: 2px;
+            width: fit-content;
+        }
+
+        .trace-logs-toggle:hover {
+            text-decoration: underline;
+        }
+
+        .trace-card-logs {
+            background: #1c1c1e;
+            border-radius: 8px;
+            padding: 0.65rem;
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: "SF Mono", Consolas, Menlo, monospace;
+            font-size: 0.72rem;
+            color: #32d74b; /* 极客绿 */
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
+            margin-top: 0.35rem;
+        }
+
+        .trace-log-line {
+            line-height: 1.35;
+            word-break: break-all;
+        }
+
+        /* Animations */
+        @keyframes text-pulse {
+            0% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes pulse-glow {
+            0% { transform: scale(1); opacity: 0.7; filter: drop-shadow(0 0 4px rgba(0, 113, 227, 0.2)); }
+            50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 16px rgba(0, 113, 227, 0.5)); }
+            100% { transform: scale(1); opacity: 0.7; filter: drop-shadow(0 0 4px rgba(0, 113, 227, 0.2)); }
+        }
+
+        /* 迷你按钮 */
+        .mini-btn {
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            background: white;
+            color: var(--text-primary);
+            transition: all 0.2s ease;
+        }
+        .mini-btn.active {
+            border-color: var(--apple-blue) !important;
+            background: var(--apple-blue) !important;
+            color: white !important;
+        }
+    </style>
+
+</head>
+<body>
+
+    <!-- Header 导航与版头 -->
+    <header>
+        <div class="logo-container">
+            <div class="logo-badge">HARNESSFLOW</div>
+            <div class="logo-title">LLM API 全球 16 大厂商并行分析控制大盘 (2026极速版)</div>
+        </div>
+        <div class="global-nav">
+            <button class="nav-tab active" id="nav-btn-console" onclick="switchPage('console')">⚙️ 并发控制台</button>
+            <button class="nav-tab" id="nav-btn-report" onclick="switchPage('report')">📊 分析成果大盘</button>
+            <button class="nav-tab" id="nav-btn-archive" onclick="switchPage('archive')">📂 智能知识沉淀</button>
+        </div>
+        <div class="status-badge-container">
+            <div class="dot-indicator"></div>
+            <span>并发多 Agent 图引擎就绪 (FastAPI: localhost:8000)</span>
+        </div>
+    </header>
+
+    <!-- 核心布局大盘 -->
+    <main>
+        
+        <!-- 第一行: 配置面板 + 可视化DAG流程图 (左侧) + Trace终端控制台 (右侧) -->
+        <div class="row" id="row-console">
+            
+            <!-- 第一列: 输入配置与主 DAG -->
+            <div class="col-input" style="flex: 1.1; display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- 配置面板 -->
+                <div class="glass-card">
+                    <div class="panel-title">
+                        <span>⚙️ 监控竞品与工作流配置 (HarnessFlow Configurator)</span>
+                    </div>
+
+                    <!-- Tabs Header -->
+                    <div class="tabs-header">
+                        <button class="tab-btn active" id="tab-btn-manual" onclick="switchTab('manual')">
+                            <span>🌐 手动选择竞品</span>
+                        </button>
+                        <button class="tab-btn" id="tab-btn-smart" onclick="switchTab('smart')">
+                            <span>⚡ 智能场景搜索</span>
+                        </button>
+                    </div>
+
+                    <!-- Tab 1: Manual Selection -->
+                    <div class="tab-pane" id="pane-manual">
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem;">
+                            勾选需要同步探测对比的目标大语言模型 API 服务商。系统采用 Scatter-Gather 并发线程池调度，执行多Agent流水线。
+                        </p>
+                        <div class="config-columns" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; margin-top: 0.5rem;">
+                            <!-- 国外代表厂商列 -->
+                            <div>
+                                <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.35rem;">
+                                    <span>🌐 国外前沿顶奢厂商 (International)</span>
+                                </h4>
+                                <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+                                    <label class="competitor-checkbox checked">
+                                        <input type="checkbox" value="OpenAI" checked onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">OpenAI (多模型矩阵，支持 o4-pro & instant 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="Anthropic" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">Anthropic (多模型矩阵，支持 claude-opus & sonnet 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="Google" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">Google (多模型矩阵，支持 gemini-flash & pro 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="Mistral" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">Mistral AI (多模型矩阵，支持 large & codestral 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="xAI" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">xAI (多模型矩阵，支持 grok-2 & mini 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="Meta" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">Meta (多模型矩阵，支持 Llama-4 & open-weights 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="Cohere" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">Cohere (多模型矩阵，支持 Command-R+ & R 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="Amazon Bedrock" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">Amazon Bedrock (多模型矩阵，支持 Nova-Premier 等)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <!-- 国内代表厂商列 -->
+                            <div>
+                                <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.35rem;">
+                                    <span>🇨🇳 国内代表旗舰厂商 (Domestic)</span>
+                                </h4>
+                                <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+                                    <label class="competitor-checkbox checked">
+                                        <input type="checkbox" value="火山引擎" checked onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">火山引擎 (多模型矩阵，支持 豆包-pro & lite 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="深度求索" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">深度求索 (多模型矩阵，支持 DeepSeek-V3 & R1 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="智谱AI" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">智谱AI (多模型矩阵，支持 GLM-4 & GLM-4-Air 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="阿里通义千问" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">阿里通义千问 (多模型矩阵，支持 Qwen-Max & Plus 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="百度文心" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">百度文心 (多模型矩阵，支持 ERNIE 4.5 & Speed 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="月之暗面" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">月之暗面 (多模型矩阵，支持 Kimi-K2.6 & K1 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="零一万物" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">零一万物 (多模型矩阵，支持 Yi-Lightning & Large 等)</span>
+                                    </label>
+                                    <label class="competitor-checkbox">
+                                        <input type="checkbox" value="商汤科技" onchange="toggleCheckbox(this)">
+                                        <div class="checkbox-custom"></div>
+                                        <span style="font-weight: 500;">商汤科技 (多模型矩阵，支持 SenseChat-Turbo 等)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tab 2: Smart Search -->
+                    <div class="tab-pane hidden" id="pane-smart">
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                            使用自然语言描述业务需求，由 Preprocessing 智能代理分析需求并自动挑选最匹配的厂商。
+                        </p>
+                        <textarea class="smart-search-box" id="smart-query-input" placeholder="例如：我想对比一下适合编写Python和C++的低延迟模型 API，价格在每百万Token $5元以内，需要支持函数调用..."></textarea>
+                        
+                        <!-- RAG Upload zone -->
+                        <div class="upload-drag-zone" id="upload-zone" onclick="triggerFileSelect()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 2px;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <span>拖拽参考文档到此处，或 <strong>点击浏览上传</strong></span>
+                            <span style="font-size: 0.72rem; opacity: 0.7;">支持格式：.txt, .md, .pdf (知识库 RAG 关联检索)</span>
+                            <input type="file" id="file-uploader" style="display: none;" onchange="handleFileSelect(event)">
+                        </div>
+                        <div class="upload-file-list" id="uploaded-files-list"></div>
+                    </div>
+
+                    <button class="action-btn" id="start-btn" onclick="startAnalysis()">
+                        <span>⚡ 启动多线程并发协同分析</span>
+                    </button>
+                </div>
+
+                <!-- DAG 协同图可视化 -->
+                <div class="glass-card">
+                    <div class="panel-title">
+                        <span>🕸️ 主进程流程拓扑图 (HarnessFlow Main DAG)</span>
+                    </div>
+                    <div class="dag-container">
+                        <svg class="dag-view" viewBox="0 0 1020 220" style="width: 100%; max-width: 1020px; height: auto;">
+                            <defs>
+                                <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#d2d2d7" />
+                                </marker>
+                                <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#0071e3" />
+                                </marker>
+                                <marker id="arrow-reject" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#ff453a" />
+                                </marker>
+                            </defs>
+
+                            <!-- 连接线 (Edges) -->
+                            <path id="edge-p1" class="edge-path" d="M 115 100 L 145 100" marker-end="url(#arrow)" />
+                            <path id="edge-p2" class="edge-path" d="M 240 100 L 270 100" marker-end="url(#arrow)" />
+                            <path id="edge-p3" class="edge-path" d="M 365 100 L 395 100" marker-end="url(#arrow)" />
+                            <path id="edge-1" class="edge-path" d="M 490 100 L 520 100" marker-end="url(#arrow)" />
+                            <path id="edge-2" class="edge-path" d="M 615 100 L 645 100" marker-end="url(#arrow)" />
+                            <path id="edge-3" class="edge-path" d="M 740 100 L 770 100" marker-end="url(#arrow)" />
+                            <path id="edge-4" class="edge-path" d="M 865 100 L 895 100" marker-end="url(#arrow)" />
+                            
+                            <!-- QC -> Analyzer 折返拦截流转路径 -->
+                            <path id="edge-reject" class="edge-path" d="M 817 120 C 780 180 730 180 692 120" marker-end="url(#arrow-reject)" style="display: none;" />
+
+                            <!-- 节点 P1: Requirement Parser -->
+                            <g id="node-requirement_parser" class="agent-node node-requirement_parser">
+                                <rect class="node-rect" x="20" y="70" width="95" height="60" />
+                                <text class="node-label" x="67.5" y="93">Parser</text>
+                                <text class="node-desc" x="67.5" y="113">需求理解 Agent</text>
+                            </g>
+
+                            <!-- 节点 P2: Competitor Discovery -->
+                            <g id="node-competitor_discovery" class="agent-node node-competitor_discovery">
+                                <rect class="node-rect" x="145" y="70" width="95" height="60" />
+                                <text class="node-label" x="192.5" y="93">Discovery</text>
+                                <text class="node-desc" x="192.5" y="113">竞品发现 Agent</text>
+                            </g>
+
+                            <!-- 节点 P3: Planner Agent -->
+                            <g id="node-planner" class="agent-node node-planner">
+                                <rect class="node-rect" x="270" y="70" width="95" height="60" />
+                                <text class="node-label" x="317.5" y="93">Planner</text>
+                                <text class="node-desc" x="317.5" y="113">编排规划 Agent</text>
+                            </g>
+
+                            <!-- 节点 A: Collector (采集) -->
+                            <g id="node-collector" class="agent-node node-collector">
+                                <rect class="node-rect" x="395" y="70" width="95" height="60" />
+                                <text class="node-label" x="442.5" y="93">Collector</text>
+                                <text class="node-desc" x="442.5" y="113">信息采集 Agent</text>
+                            </g>
+
+                            <!-- 节点 B: Sanitizer (脱敏) -->
+                            <g id="node-sanitizer" class="agent-node node-sanitizer">
+                                <rect class="node-rect" x="520" y="70" width="95" height="60" />
+                                <text class="node-label" x="567.5" y="93">Sanitizer</text>
+                                <text class="node-desc" x="567.5" y="113">隐私脱敏 Agent</text>
+                            </g>
+
+                            <!-- 节点 C: Analyzer (分析) -->
+                            <g id="node-analyzer" class="agent-node node-analyzer">
+                                <rect class="node-rect" x="645" y="70" width="95" height="60" />
+                                <text class="node-label" x="692.5" y="93">Analyzer</text>
+                                <text class="node-desc" x="692.5" y="113">竞品分析 Agent</text>
+                            </g>
+
+                            <!-- 节点 D: QC (校验) -->
+                            <g id="node-qc" class="agent-node node-qc">
+                                <rect class="node-rect" x="770" y="70" width="95" height="60" />
+                                <text class="node-label" x="817.5" y="93">QC Auditor</text>
+                                <text class="node-desc" x="817.5" y="113">强类型过审 Agent</text>
+                            </g>
+
+                            <!-- 节点 E: Writer (生成) -->
+                            <g id="node-writer" class="agent-node node-writer">
+                                <rect class="node-rect" x="895" y="70" width="95" height="60" />
+                                <text class="node-label" x="942.5" y="93">Writer</text>
+                                <text class="node-desc" x="942.5" y="113">报告生成 Agent</text>
+                            </g>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第二列: 实时并发状态与 Agent Trace 面板 -->
+            <div class="col-trace" style="flex: 1.3; display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- ⚡ 实时并发任务状态监控网格 (Parallel Task Monitor) -->
+                <div class="glass-card parallel-monitor-card" id="parallel-monitor-card" style="display: none;">
+                    <div class="panel-title">
+                        <span>⚡ 实时并发任务状态监控网格 (Parallel Task Monitor)</span>
+                    </div>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem;">
+                        多线程并发 Scatter-Gather 调度中。已勾选的各个厂商正处于独立的子线程管道中，以下是它们的实时协同阶段：
+                    </p>
+                    <div id="parallel-grid-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem;">
+                        <!-- 并行卡片将通过 JS 动态注入 -->
+                    </div>
+                </div>
+
+                <!-- 🧬 Agent 执行轨迹与协作面板 -->
+                <div class="glass-card" id="agent-trace-card" style="display: flex; flex-direction: column; flex: 1; min-height: 500px; padding: 1.25rem;">
+                    <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; border-bottom: none;">
+                        <span>🧬 Agent 级联协作 Trace 面板</span>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="mini-btn active" id="btn-trace-cards" onclick="switchTraceView('cards')" style="padding: 3px 10px; font-size: 0.72rem; border-radius: 6px; cursor: pointer;">卡片轨迹</button>
+                            <button class="mini-btn" id="btn-trace-raw" onclick="switchTraceView('raw')" style="padding: 3px 10px; font-size: 0.72rem; border-radius: 6px; cursor: pointer;">原始日志</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 卡片轨迹 Timeline 视图 -->
+                    <div class="trace-timeline-view" id="trace-timeline-container" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; max-height: 520px; padding-right: 4px;">
+                        <div class="empty-placeholder" style="padding: 3rem 1.5rem; font-size: 0.82rem; text-align: center; color: var(--text-secondary);">
+                            <p style="opacity: 0.7; line-height: 1.5;">等待任务拉起。<br>启动后将流式展现意图分析、厂商检索、信息采集、脱敏、分析师抽取及过审打回等协作细节。</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 原始日志终端视图 (原本的 console-logs) -->
+                    <div class="console-body" id="console-logs" style="display: none; flex: 1; overflow-y: auto; height: 520px; font-family: 'SF Mono', Consolas, Menlo, monospace; background: #fafafa; border: 1px solid var(--card-border); border-radius: 8px; padding: 0.75rem; margin-top: 0px;">
+                        <div class="log-entry">
+                            <span class="log-time">[11:22:22]</span>
+                            <span class="log-tag system">SYSTEM</span>
+                            <span class="log-text">控制大盘就绪，等待拉起多 Agent 并发分析流。</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第三列: 最终报告预览展示区 -->
+            <div class="col-report-preview" style="flex: 1.6; display: flex; flex-direction: column;">
+                <section class="glass-card report-section" style="flex: 1; display: flex; flex-direction: column; height: 100%; min-height: 600px; padding: 1.25rem; margin-bottom: 0px;">
+                    <div class="panel-title" style="margin-bottom: 0.75rem;">
+                        <span>📊 最终交付成果: 竞品对比大盘 & 溯源审计报告</span>
+                    </div>
+                    <div class="report-content" id="report-preview-box" style="flex: 1; overflow-y: auto; padding: 1.25rem; background: rgba(255,255,255,0.45); border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); height: calc(100vh - 240px);">
+                        <div class="empty-placeholder-glow" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; color: var(--text-secondary); padding: 4rem 1.5rem;">
+                            <div class="pulsing-brain" style="font-size: 3.5rem; margin-bottom: 1.5rem; animation: pulse-glow 2s infinite ease-in-out;">🧠</div>
+                            <h3 style="font-size: 1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">多 Agent 智能协同分析报告大屏</h3>
+                            <p style="font-size: 0.8rem; max-width: 280px; line-height: 1.45; opacity: 0.8;">点击左侧“启动并发分析”，数据流经过多路抽取与强契约质检审核后，将就地极速渲染出高保真报告大盘。</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            
+        </div>
+
+        <!-- 成果展示区: 最终竞品分析报告 (Page 2) -->
+        <div class="row hidden-page" id="row-report">
+            <section class="glass-card report-section">
+                <div class="panel-title">
+                    <span>📊 最终交付成果: 竞品对比大盘 & 溯源审计报告</span>
+                </div>
+                <div class="report-content" id="report-box">
+                    <div class="empty-placeholder">
+                        <p>暂无分析数据。勾选竞品并点击“启动分析”，数据流经过并行脱敏、多路强类型校验过审后，将在此渲染三大可视化苹果 HIG 风格报表。</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Page 3: 📂 智能知识沉淀 (Archive & KB) -->
+        <div class="row hidden-page" id="row-archive" style="flex-direction: column; gap: 2rem;">
+            <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 2rem; width: 100%;">
+                
+                <!-- 左侧: 知识库文档 Ingestion 管理器 -->
+                <div class="glass-card">
+                    <div class="panel-title">
+                        <span>📂 智能 RAG 知识库管理 (Knowledge Base Ingestion)</span>
+                    </div>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem;">
+                        向底层 TF-IDF 局部向量检索库灌入产品手册、最新价格文档或 API 规范。系统在智能场景匹配中将自动触发 RAG 检索增强。
+                    </p>
+                    
+                    <div class="upload-drag-zone" id="archive-upload-zone" onclick="triggerArchiveFileSelect()" style="border: 2px dashed rgba(0, 0, 0, 0.15); border-radius: 12px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s ease;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--apple-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 0.5rem; opacity: 0.8;">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.25rem;">将文档拖拽至此处，或点击上传</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary);">支持 .txt, .md, .pdf 格式 · 系统自动清洗及语义切片</div>
+                        <input type="file" id="archive-file-uploader" style="display: none;" onchange="handleArchiveFileSelect(event)">
+                    </div>
+                    
+                    <div class="upload-file-list" id="archive-uploaded-files-list" style="margin-top: 1rem; max-height: 300px; overflow-y: auto;">
+                        <!-- 同步显示上传的文档 -->
+                    </div>
+                </div>
+                
+                <!-- 右侧: 历史评测报告学习卡片 (RAG KB List) -->
+                <div class="glass-card">
+                    <div class="panel-title">
+                        <span>🧠 历史智能分析归档 & 闭环演进库 (Learning KB)</span>
+                    </div>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                        历史生成的完整评测报告。包含每次评测打分与人工反馈。系统会缓存并学习每次分析结果，实现竞品知识沉淀。
+                    </p>
+                    <div class="history-list" id="history-items-container" style="max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem;">
+                        <div class="empty-placeholder" style="padding: 1.5rem; font-size: 0.8rem;">
+                            正在加载历史分析归档...
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 溯源审计 Tooltip 气泡浮窗 -->
+    <div class="trace-tooltip" id="trace-tooltip"></div>
+
+    <script>
+        let reportArchive = {};
+        let currentTab = 'manual';
+        let selectedRating = 0;
+        let activeReportId = "";
+        let currentVendorList = [];
+
+        // ==========================================================================
+        // HarnessFlow - Agent Trace & Timeline JS Logic (New Additions)
+        // ==========================================================================
+        const agentInfo = {
+            'requirement_parser': {
+                name: '🧠 需求解析 Agent (Requirement Parser)',
+                desc: '理解用户对 LLM 竞品分析的自然语言偏好及硬性约束。'
+            },
+            'competitor_discovery': {
+                name: '🔍 竞品发现 Agent (Competitor Discovery)',
+                desc: '匹配知识库或根据搜索意图发现并精准推荐对比厂商。'
+            },
+            'planner': {
+                name: '📅 编排规划 Agent (Planner Agent)',
+                desc: '智能规划 Scatter-Gather 并发线程池与质检决策路径。'
+            },
+            'collector': {
+                name: '📥 信息采集 Agent (Collector Agent)',
+                desc: '针对目标服务商同步探测并拉取最新评测数据与价格文档。'
+            },
+            'sanitizer': {
+                name: '🛡️ 隐私脱敏 Agent (Sanitizer Agent)',
+                desc: '自动清洗脱敏泄露的 API Key、隐私电话及敏感语料信息。'
+            },
+            'analyzer': {
+                name: '📊 竞品分析 Agent (Analyzer Agent)',
+                desc: '从上下文中精准抽取强类型 schema 字段，锚定真实引用。'
+            },
+            'qc': {
+                name: '🛑 强类型过审 Agent (QC Auditor)',
+                desc: '执行 Pydantic 数据契约强核验，无证言论自动打回重做。'
+            },
+            'writer': {
+                name: '✍️ 报告生成 Agent (Writer Agent)',
+                desc: '将已过审的高保真指标整合为全局对比分析与可信溯源报告。'
+            }
+        };
+
+        // 双模切换：卡片轨迹 VS 原始日志
+        function switchTraceView(viewMode) {
+            const cardsBtn = document.getElementById('btn-trace-cards');
+            const rawBtn = document.getElementById('btn-trace-raw');
+            const timelineContainer = document.getElementById('trace-timeline-container');
+            const consoleLogs = document.getElementById('console-logs');
+
+            if (!cardsBtn || !rawBtn || !timelineContainer || !consoleLogs) return;
+
+            if (viewMode === 'cards') {
+                cardsBtn.classList.add('active');
+                rawBtn.classList.remove('active');
+                timelineContainer.style.display = 'flex';
+                consoleLogs.style.display = 'none';
+            } else {
+                cardsBtn.classList.remove('active');
+                rawBtn.classList.add('active');
+                timelineContainer.style.display = 'none';
+                consoleLogs.style.display = 'block';
+            }
+        }
+
+        // 折叠/展开卡片日志
+        function toggleCardLogs(cardId) {
+            const logsDiv = document.getElementById(`logs-${cardId}`);
+            const toggleBtn = document.getElementById(`toggle-btn-${cardId}`);
+            if (!logsDiv || !toggleBtn) return;
+            
+            if (logsDiv.style.display === 'none') {
+                logsDiv.style.display = 'flex';
+                toggleBtn.innerHTML = '🔽 收起日志';
+            } else {
+                logsDiv.style.display = 'none';
+                toggleBtn.innerHTML = '▶️ 展开日志';
+            }
+        }
+
+        // 高保真输入输出摘要提取器
+        function extractIOSummary(node, competitor, state, ev) {
+            const compName = competitor && competitor !== 'ALL' ? competitor : '';
+            let input = '';
+            let output = '';
+            
+            if (node === 'requirement_parser') {
+                input = '用户的原始自然语言分析需求。';
+                if (ev === 'node_end') {
+                    const req = state.parsed_requirement || {};
+                    output = `解析成功。判定业务场景：<strong style="color:var(--apple-blue);">${req.scenario || '未定义'}</strong>，抓取指标：${(req.target_dimensions || []).join('、') || '默认多维指标'}。`;
+                } else {
+                    output = '正在执行场景分类、多轮语义指标对齐提炼...';
+                }
+            }
+            else if (node === 'competitor_discovery') {
+                input = '提炼的过滤场景偏好与系统预置厂商知识库。';
+                if (ev === 'node_end') {
+                    const vendors = state.recommended_vendors || [];
+                    output = `智能匹配厂商：<span style="color:#137333; font-weight:600;">${vendors.map(v => v.vendor_name).join(', ') || '未发现'}</span>，完成了时效性安全评估。`;
+                } else {
+                    output = '正在调取时效性审计、推荐厂商匹配决策模型...';
+                }
+            }
+            else if (node === 'planner') {
+                input = '目标竞品厂商清单与运行时执行上下文。';
+                if (ev === 'node_end') {
+                    const plan = state.execution_plan || {};
+                    output = `编排完毕。调度策略：<strong style="color:var(--apple-blue);">${plan.plan_type === 'cache_hit' ? '缓存极速复用流' : 'Scatter-Gather 并发线程池'}</strong>，已挂载过审重试决策图。`;
+                } else {
+                    output = '正在进行异步并行流水线编排、图引擎调度编排...';
+                }
+            }
+            else if (node === 'collector') {
+                input = `向竞品 ${compName} 同步拉取并清洗评测语料的请求。`;
+                if (ev === 'node_end') {
+                    output = `采集成功。获取原始网页，文本体量约 <strong>${(state.html_length || 15420)}</strong> 字符，准备进入脱敏流水线。`;
+                } else {
+                    output = `正在从仿真服务器及在线网页同步拉取 ${compName} 最新 API 契约文本...`;
+                }
+            }
+            else if (node === 'sanitizer') {
+                input = `厂商 ${compName} 的原始技术文档与价格数据网页。`;
+                if (ev === 'node_end') {
+                    output = '安全合规脱敏完毕。已自动隐藏或清洗涉密的开发者 Key、个人隐私电话等违规指纹。';
+                } else {
+                    output = '正在扫描网页隐私特征、执行敏感变量脱敏过滤...';
+                }
+            }
+            else if (node === 'analyzer') {
+                input = `已清洗的 ${compName} 文本数据包与 Pydantic 目标 Schema 定义。`;
+                if (ev === 'node_end') {
+                    output = `抽取完毕。成功提取 ${compName} 的价格契约、速率限制及 claims 论证等结构化字段，进入过审大门。`;
+                } else {
+                    output = '正在遍历上下文、解析并抽取强契约 Schema 属性及证据锚点...';
+                }
+            }
+            else if (node === 'qc') {
+                input = `已抽取的 ${compName} 结构化分析数据包及 claims 证据链依据。`;
+                if (ev === 'node_end') {
+                    if (state.validation_verdict === false) {
+                        output = `<span style="color:#d11a2a; font-weight:600;">🛑 契约质检打回！</span>数据未通过 Pydantic 核验。原因: ${state.feedback || '关键证据链断裂或必填字段缺失。'}`;
+                    } else {
+                        output = `<span style="color:#1f8242; font-weight:600;">✅ 质检大门通过！</span>数据完整度 100%，已绑定 SourceTrace 证据可信溯源标志。`;
+                    }
+                } else {
+                    output = '正在执行严苛的强类型模式核验及 claim 证据链合法性校验...';
+                }
+            }
+            else if (node === 'writer') {
+                input = '各竞品已通过强契约审核的高保真结构化指标归档。';
+                if (ev === 'node_end') {
+                    output = '🎉 报告生成就绪。包含对比大盘、定价细节、速率限制及证据追踪，已渲染在展示区。';
+                } else {
+                    output = '整合全部过审竞品指标，编写 2026 年度旗舰级竞品分析与证据链报告...';
+                }
+            }
+            
+            return { input, output };
+        }
+
+        // 流式追加/更新 timeline 卡片轨迹
+        function updateTraceTimeline(ev, node, competitor, state) {
+            const container = document.getElementById('trace-timeline-container');
+            if (!container) return;
+
+            // 清理 placeholder
+            const placeholder = container.querySelector('.empty-placeholder');
+            if (placeholder) {
+                container.innerHTML = '';
+            }
+
+            const retryCount = state.retry_count || 0;
+            const compName = competitor && competitor !== 'ALL' ? competitor : '';
+            const displayComp = compName ? `[${compName}] ` : '';
+            
+            // 唯一卡片 ID，重试的卡片追加在下方
+            const cardId = `trace-card-${node}-${compName || 'ALL'}-r${retryCount}`;
+            let card = document.getElementById(cardId);
+            
+            const info = agentInfo[node] || { name: `${node} Agent`, desc: '' };
+            const agentDisplayName = `${displayComp}${info.name}`;
+            
+            let statusClass = 'waiting';
+            let statusText = '等待中';
+            
+            if (ev === 'node_start') {
+                statusClass = retryCount > 0 ? 'retry' : 'running';
+                statusText = retryCount > 0 ? `重试中 #${retryCount}` : '运行中';
+            } else if (ev === 'node_end') {
+                if (node === 'qc' && state.validation_verdict === false) {
+                    statusClass = 'failed';
+                    statusText = '打回重试';
+                } else {
+                    statusClass = 'success';
+                    statusText = '成功';
+                }
+            }
+
+            const summaries = extractIOSummary(node, competitor, state, ev);
+            
+            if (!card) {
+                card = document.createElement('div');
+                card.id = cardId;
+                container.appendChild(card);
+            }
+            
+            card.className = `trace-card ${statusClass}`;
+            
+            let ioHtml = '';
+            if (summaries.input) {
+                ioHtml += `
+                    <div class="io-block">
+                        <div class="io-label">输入摘要</div>
+                        <div class="io-text">${summaries.input}</div>
+                    </div>
+                `;
+            }
+            if (summaries.output) {
+                ioHtml += `
+                    <div class="io-block">
+                        <div class="io-label">输出摘要</div>
+                        <div class="io-text">${summaries.output}</div>
+                    </div>
+                `;
+            }
+            
+            let qaRibbonHtml = '';
+            if (node === 'qc' && state.validation_verdict === false) {
+                qaRibbonHtml = `
+                    <div class="qa-alert-ribbon">
+                        <strong>🛑 QA failed，打回 Analyzer 重新提取！</strong><br>
+                        <span>原因: ${state.feedback || '关键 claims 缺失合法 evidence_ids'}</span>
+                    </div>
+                `;
+            } else if (state.feedback) {
+                qaRibbonHtml = `
+                    <div class="qa-alert-ribbon" style="background: rgba(52, 199, 89, 0.05); border-color: rgba(52, 199, 89, 0.2); color: #1f8242;">
+                        <strong>ℹ️ QA 质检反馈：</strong> ${state.feedback}
+                    </div>
+                `;
+            }
+            
+            let logsHtml = '';
+            if (state.trace_logs && state.trace_logs.length > 0) {
+                const logLines = state.trace_logs.map(log => `<div class="trace-log-line">${escapeHtml(log)}</div>`).join('');
+                logsHtml = `
+                    <button class="trace-logs-toggle" id="toggle-btn-${cardId}" onclick="toggleCardLogs('${cardId}')">▶️ 展开日志</button>
+                    <div class="trace-card-logs" id="logs-${cardId}" style="display: none;">
+                        ${logLines}
+                    </div>
+                `;
+            }
+            
+            card.innerHTML = `
+                <div class="trace-card-header">
+                    <div class="trace-card-title">
+                        ${agentDisplayName}
+                    </div>
+                    <span class="trace-card-badge ${statusClass}">${statusText}</span>
+                </div>
+                <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px;">
+                    ${info.desc}
+                </div>
+                <div class="trace-card-io">
+                    ${ioHtml}
+                </div>
+                ${qaRibbonHtml}
+                ${logsHtml}
+            `;
+            
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ==========================================
+        // ⚡ Premium Interactive Visual & Action Feedback Helpers
+        // ==========================================
+        
+        // 1. Apple HIG Glassmorphism Toast Notification
+        function showToast(message, type = 'info') {
+            let container = document.querySelector('.toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'toast-container';
+                document.body.appendChild(container);
+            }
+            
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            
+            let icon = 'ℹ️';
+            if (type === 'success') icon = '🟢';
+            else if (type === 'error') icon = '🛑';
+            else if (type === 'warning') icon = '⚠️';
+            
+            toast.innerHTML = `
+                <span class="toast-icon">${icon}</span>
+                <span class="toast-message">${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Force reflow
+            toast.offsetHeight;
+            
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    toast.remove();
+                }, 400);
+            }, 3000);
+        }
+
+        // 2. Lockout and Unlock UI Input controls during active analysis runs
+        function toggleUIControls(disable = true) {
+            const controls = [
+                document.getElementById('smart-query-input'),
+                document.getElementById('upload-zone'),
+                document.getElementById('tab-btn-manual'),
+                document.getElementById('tab-btn-smart'),
+                document.getElementById('file-uploader'),
+                ...document.querySelectorAll('.config-columns input[type="checkbox"]'),
+                ...document.querySelectorAll('.competitor-checkbox')
+            ];
+            
+            controls.forEach(ctrl => {
+                if (!ctrl) return;
+                if (disable) {
+                    ctrl.classList.add('disabled-element');
+                    if (ctrl.tagName === 'INPUT' || ctrl.tagName === 'TEXTAREA' || ctrl.tagName === 'BUTTON') {
+                        ctrl.disabled = true;
+                    }
+                } else {
+                    ctrl.classList.remove('disabled-element');
+                    if (ctrl.tagName === 'INPUT' || ctrl.tagName === 'TEXTAREA' || ctrl.tagName === 'BUTTON') {
+                        ctrl.disabled = false;
+                    }
+                }
+            });
+        }
+
+        // 3. Render Neural Thinking Dashboard immediately inside `#report-box` on start
+        function showThinkingScreen() {
+            const reportBox = document.getElementById('report-box');
+            reportBox.innerHTML = `
+                <div class="thinking-container">
+                    <div class="thinking-header">
+                        <div class="thinking-brain-wrapper">
+                            <svg class="thinking-brain-svg" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="12" class="brain-center" />
+                                <circle cx="25" cy="30" r="7" class="brain-node" id="b-node-1" />
+                                <circle cx="75" cy="30" r="7" class="brain-node" id="b-node-2" />
+                                <circle cx="15" cy="60" r="7" class="brain-node" id="b-node-3" />
+                                <circle cx="85" cy="60" r="7" class="brain-node" id="b-node-4" />
+                                <circle cx="35" cy="80" r="7" class="brain-node" id="b-node-5" />
+                                <circle cx="65" cy="80" r="7" class="brain-node" id="b-node-6" />
+                                <line x1="50" y1="50" x2="25" y2="30" class="brain-link" />
+                                <line x1="50" y1="50" x2="75" y2="30" class="brain-link" />
+                                <line x1="50" y1="50" x2="15" y2="60" class="brain-link" />
+                                <line x1="50" y1="50" x2="85" y2="60" class="brain-link" />
+                                <line x1="50" y1="50" x2="35" y2="80" class="brain-link" />
+                                <line x1="50" y1="50" x2="65" y2="80" class="brain-link" />
+                            </svg>
+                        </div>
+                        <div class="thinking-title-block">
+                            <div class="thinking-title">🧠 Multi-Agent 协同神经网路规划中...</div>
+                            <div class="thinking-subtitle">HarnessFlow 并行流水线正在对竞品数据进行提取、校验与溯源审计</div>
+                        </div>
+                    </div>
+                    <div class="thinking-agents-list">
+                        <div class="thinking-agent-item" id="think-agent-parser">
+                            <span class="think-agent-status">⏳</span>
+                            <span class="think-agent-name">Parser Agent (需求解析)</span>
+                            <span class="think-agent-desc">分析自然语言业务场景，提炼过滤核心评测指标</span>
+                        </div>
+                        <div class="thinking-agent-item" id="think-agent-discovery">
+                            <span class="think-agent-status">⏳</span>
+                            <span class="think-agent-name">Discovery Agent (竞品筛选)</span>
+                            <span class="think-agent-desc">基于提取到的核心偏好，精准匹配全球十六大旗舰模型</span>
+                        </div>
+                        <div class="thinking-agent-item" id="think-agent-planner">
+                            <span class="think-agent-status">⏳</span>
+                            <span class="think-agent-name">Planner Agent (流水线规划)</span>
+                            <span class="think-agent-desc">动态编排 Scatter-Gather 线程池与过审决策流</span>
+                        </div>
+                        <div class="thinking-agent-item" id="think-agent-pipeline">
+                            <span class="think-agent-status">⏳</span>
+                            <span class="think-agent-name">Scatter-Gather Pipeline (并发采集脱敏分析)</span>
+                            <span class="think-agent-desc">多线程拉取网页、字段抽取及隐私合规脱敏</span>
+                        </div>
+                        <div class="thinking-agent-item" id="think-agent-qc">
+                            <span class="think-agent-status">⏳</span>
+                            <span class="think-agent-name">QC Agent (契约校验门禁)</span>
+                            <span class="think-agent-desc">执行严苛的 Pydantic 数据类型校验，消除大模型幻觉</span>
+                        </div>
+                        <div class="thinking-agent-item" id="think-agent-writer">
+                            <span class="think-agent-status">⏳</span>
+                            <span class="think-agent-name">Writer Agent (报告撰写)</span>
+                            <span class="think-agent-desc">融合过审对比字段，锚定真实引用证据源，输出对比大盘</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 4. Update the loaders and state of sub-nodes on our interactive thinking dashboard
+        function updateThinkingUI(node, status) {
+            let itemId = '';
+            if (node === 'requirement_parser') itemId = 'think-agent-parser';
+            else if (node === 'competitor_discovery') itemId = 'think-agent-discovery';
+            else if (node === 'planner') itemId = 'think-agent-planner';
+            else if (['collector', 'sanitizer', 'analyzer'].includes(node)) itemId = 'think-agent-pipeline';
+            else if (node === 'qc') itemId = 'think-agent-qc';
+            else if (node === 'writer') itemId = 'think-agent-writer';
+            
+            if (!itemId) return;
+            
+            const item = document.getElementById(itemId);
+            if (!item) return;
+            
+            const statusSpan = item.querySelector('.think-agent-status');
+            
+            item.classList.remove('active', 'completed', 'failed');
+            
+            if (status === 'active') {
+                item.classList.add('active');
+                statusSpan.innerHTML = '⚡';
+                statusSpan.style.animation = 'pulse-dot 1s infinite alternate';
+            } else if (status === 'completed') {
+                item.classList.add('completed');
+                statusSpan.innerHTML = '✅';
+                statusSpan.style.animation = 'none';
+            } else if (status === 'failed') {
+                item.classList.add('failed');
+                statusSpan.innerHTML = '❌';
+                statusSpan.style.animation = 'none';
+            }
+        }
+
+        // 5. Illuminate active sub-nodes in our neural brain SVG visualization
+        function highlightBrainNode(node) {
+            let nodeId = '';
+            if (node === 'requirement_parser') nodeId = 'b-node-1';
+            else if (node === 'competitor_discovery') nodeId = 'b-node-2';
+            else if (node === 'planner') nodeId = 'b-node-3';
+            else if (['collector', 'sanitizer', 'analyzer'].includes(node)) nodeId = 'b-node-4';
+            else if (node === 'qc') nodeId = 'b-node-5';
+            else if (node === 'writer') nodeId = 'b-node-6';
+            
+            if (!nodeId) return;
+            
+            // Reset all node colors
+            for (let i = 1; i <= 6; i++) {
+                const el = document.getElementById(`b-node-${i}`);
+                if (el) {
+                    el.style.fill = '#d2d2d7';
+                    el.style.filter = 'none';
+                }
+            }
+            
+            const activeNode = document.getElementById(nodeId);
+            if (activeNode) {
+                activeNode.style.fill = 'var(--apple-blue)';
+                activeNode.style.filter = 'drop-shadow(0 0 6px rgba(0, 113, 227, 0.8))';
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadHistoryList();
+            setupDragAndDrop();
+        });
+
+        // 切换配置模式 Tab
+        function switchTab(mode) {
+            currentTab = mode;
+            document.getElementById('tab-btn-manual').classList.toggle('active', mode === 'manual');
+            document.getElementById('tab-btn-smart').classList.toggle('active', mode === 'smart');
+            document.getElementById('pane-manual').classList.toggle('hidden', mode !== 'manual');
+            document.getElementById('pane-smart').classList.toggle('hidden', mode !== 'smart');
+        }
+
+        // 按钮交互改变状态样式
+        function toggleCheckbox(el) {
+            if (el.checked) {
+                el.parentElement.classList.add('checked');
+            } else {
+                el.parentElement.classList.remove('checked');
+            }
+        }
+
+        // 拖拽上传/浏览上传处理
+        function triggerFileSelect() {
+            document.getElementById('file-uploader').click();
+        }
+
+        function switchPage(pageId) {
+            // Remove active classes from all nav tabs
+            document.getElementById('nav-btn-console').classList.remove('active');
+            document.getElementById('nav-btn-report').classList.remove('active');
+            document.getElementById('nav-btn-archive').classList.remove('active');
+            
+            // Add active class to corresponding nav tab
+            const activeBtn = document.getElementById(`nav-btn-${pageId}`);
+            if (activeBtn) activeBtn.classList.add('active');
+            
+            // Hide all pages
+            document.getElementById('row-console').classList.add('hidden-page');
+            document.getElementById('row-report').classList.add('hidden-page');
+            document.getElementById('row-archive').classList.add('hidden-page');
+            
+            // Show selected page
+            const selectedPage = document.getElementById(`row-${pageId}`);
+            if (selectedPage) selectedPage.classList.remove('hidden-page');
+            
+            console.log(`Switched to page: ${pageId}`);
+        }
+
+        function triggerArchiveFileSelect() {
+            document.getElementById('archive-file-uploader').click();
+        }
+
+        function handleArchiveFileSelect(event) {
+            const files = event.target.files;
+            if (files.length > 0) {
+                uploadFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(event) {
+            const files = event.target.files;
+            if (files.length > 0) {
+                uploadFile(files[0]);
+            }
+        }
+
+        function setupDragAndDrop() {
+            const zones = [
+                { id: 'upload-zone', el: document.getElementById('upload-zone') },
+                { id: 'archive-upload-zone', el: document.getElementById('archive-upload-zone') }
+            ];
+            
+            zones.forEach(zone => {
+                const uploadZone = zone.el;
+                if (uploadZone) {
+                    uploadZone.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        uploadZone.style.borderColor = 'var(--apple-blue)';
+                        uploadZone.style.background = 'rgba(0, 113, 227, 0.04)';
+                    });
+                    uploadZone.addEventListener('dragleave', (e) => {
+                        e.preventDefault();
+                        uploadZone.style.borderColor = 'rgba(0, 0, 0, 0.15)';
+                        uploadZone.style.background = 'transparent';
+                    });
+                    uploadZone.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        uploadZone.style.borderColor = 'rgba(0, 0, 0, 0.15)';
+                        uploadZone.style.background = 'transparent';
+                        const files = e.dataTransfer.files;
+                        if (files.length > 0) {
+                            uploadFile(files[0]);
+                        }
+                    });
+                }
+            });
+        }
+
+        function uploadFile(file) {
+            const list1 = document.getElementById('uploaded-files-list');
+            const list2 = document.getElementById('archive-uploaded-files-list');
+            const fileId = 'file-' + Date.now();
+            
+            if (list1) {
+                const item1 = document.createElement('div');
+                item1.id = fileId + '-list1';
+                item1.style.cssText = "display: flex; align-items: center; justify-content: space-between; background: rgba(0, 0, 0, 0.03); border: 1px solid var(--card-border); border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.5rem; font-size: 0.8rem;";
+                item1.innerHTML = `
+                    <span>📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)</span>
+                    <span style="color: var(--apple-blue);" class="upload-status">⏳ 正在分片索引...</span>
+                `;
+                list1.appendChild(item1);
+            }
+            
+            if (list2) {
+                const item2 = document.createElement('div');
+                item2.id = fileId + '-list2';
+                item2.style.cssText = "display: flex; align-items: center; justify-content: space-between; background: rgba(0, 0, 0, 0.03); border: 1px solid var(--card-border); border-radius: 8px; padding: 0.5rem 0.75rem; margin-top: 0.5rem; font-size: 0.8rem;";
+                item2.innerHTML = `
+                    <span>📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)</span>
+                    <span style="color: var(--apple-blue);" class="upload-status">⏳ 正在分片索引...</span>
+                `;
+                list2.appendChild(item2);
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('http://localhost:8000/api/upload/document', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("上传失败");
+                return res.json();
+            })
+            .then(data => {
+                [fileId + '-list1', fileId + '-list2'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        const statusSpan = el.querySelector('.upload-status');
+                        statusSpan.style.color = '#137333';
+                        statusSpan.innerHTML = `✓ 已成功索引 (${data.total_chunks || 0} 片段)`;
+                    }
+                });
+                logToConsole('SYSTEM', `成功上传参考文档 [${file.name}]，已分片 ${data.total_chunks || 0} 个 RAG 检索片段。`);
+            })
+            .catch(err => {
+                [fileId + '-list1', fileId + '-list2'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        const statusSpan = el.querySelector('.upload-status');
+                        statusSpan.style.color = 'var(--color-qc)';
+                        statusSpan.innerHTML = `❌ 失败: ${err.message}`;
+                    }
+                });
+                logToConsole('SYSTEM', `参考文档 [${file.name}] 索引失败: ${err.message}`, true);
+            });
+        }
+
+        // 向控制台输出日志
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function logToConsole(tag, text, isError = false) {
+            const consoleBody = document.getElementById('console-logs');
+            const now = new Date();
+            const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+
+            let tagClass = 'system';
+            if (tag.toLowerCase().includes('collector')) tagClass = 'collector';
+            else if (tag.toLowerCase().includes('sanitizer')) tagClass = 'sanitizer';
+            else if (tag.toLowerCase().includes('analyzer')) tagClass = 'analyzer';
+            else if (tag.toLowerCase().includes('qc-ok')) tagClass = 'qc-ok';
+            else if (tag.toLowerCase().includes('qc')) tagClass = 'qc';
+            else if (tag.toLowerCase().includes('writer')) tagClass = 'writer';
+
+            entry.innerHTML = `
+                <span class="log-time">[${timeStr}]</span>
+                <span class="log-tag ${tagClass}">${escapeHtml(tag)}</span>
+                <span class="log-text" style="${isError ? 'color: var(--color-qc); font-weight: 500;' : ''}">${escapeHtml(text)}</span>
+            `;
+
+            consoleBody.appendChild(entry);
+            consoleBody.scrollTop = consoleBody.scrollHeight;
+        }
+
+        // 清空主 DAG 流程节点的所有状态
+        function resetDAGNodes() {
+            const nodes = ['node-requirement_parser', 'node-competitor_discovery', 'node-planner', 'node-collector', 'node-sanitizer', 'node-analyzer', 'node-qc', 'node-writer'];
+            nodes.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.className = `agent-node ${id}`;
+            });
+            // 隐藏折返线与高亮边
+            document.getElementById('edge-reject').style.display = 'none';
+            const edges = ['edge-p1', 'edge-p2', 'edge-p3', 'edge-1', 'edge-2', 'edge-3', 'edge-4'];
+            edges.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.className = 'edge-path';
+            });
+        }
+
+        // 设置主 DAG 节点状态样式
+        function setNodeStatus(nodeId, status) {
+            const el = document.getElementById(`node-${nodeId}`);
+            if (el) {
+                el.classList.remove('active', 'completed', 'failed');
+                if (status) {
+                    el.classList.add(status);
+                }
+            }
+        }
+
+        // 设置主 DAG 边管道状态
+        function setEdgeActive(edgeId, isActive) {
+            const el = document.getElementById(edgeId);
+            if (el) {
+                if (isActive) el.classList.add('active');
+                else el.classList.remove('active');
+            }
+        }
+
+        // ==========================================
+        // ⚡ 实时并发监控网格 UI 渲染方法
+        // ==========================================
+        function initParallelMonitorGrid(competitorList) {
+            const monitorCard = document.getElementById('parallel-monitor-card');
+            const gridContainer = document.getElementById('parallel-grid-container');
+            
+            gridContainer.innerHTML = '';
+            monitorCard.style.display = 'block';
+            
+            const modelMap = {
+                "OpenAI": "多模型矩阵 (o4-pro & instant 等)",
+                "Anthropic": "多模型矩阵 (claude-opus & sonnet 等)",
+                "Google": "多模型矩阵 (gemini-flash & pro 等)",
+                "Mistral": "多模型矩阵 (large & codestral 等)",
+                "xAI": "多模型矩阵 (grok-2 & mini 等)",
+                "Meta": "多模型矩阵 (Llama-4 & open-weights 等)",
+                "Cohere": "多模型矩阵 (Command-R+ & R 等)",
+                "Amazon Bedrock": "多模型矩阵 (Nova-Premier 等)",
+                "火山引擎": "多模型矩阵 (豆包-pro & lite 等)",
+                "深度求索": "多模型矩阵 (DeepSeek-V3 & R1 等)",
+                "智谱AI": "多模型矩阵 (GLM-4 & GLM-4-Air 等)",
+                "阿里通义千问": "多模型矩阵 (Qwen-Max & Plus 等)",
+                "百度文心": "多模型矩阵 (ERNIE 4.5 & Speed 等)",
+                "月之暗面": "多模型矩阵 (Kimi-K2.6 & K1 等)",
+                "零一万物": "多模型矩阵 (Yi-Lightning & Large 等)",
+                "商汤科技": "多模型矩阵 (SenseChat-Turbo 等)"
+            };
+
+            competitorList.forEach(comp => {
+                const modelName = modelMap[comp] || "2026旗舰";
+                const row = document.createElement('div');
+                row.className = 'monitor-row';
+                row.id = `parallel-row-${comp}`;
+                row.innerHTML = `
+                    <div class="monitor-meta">
+                        <span class="monitor-name">🔍 ${comp}</span>
+                        <span class="monitor-model">${modelName}</span>
+                    </div>
+                    <div class="monitor-steps">
+                        <span class="m-dot" id="m-dot-${comp}-collector"></span>
+                        <span class="m-step-text" id="m-text-${comp}-collector">Collector</span>
+                        <span style="color:#d2d2d7; font-size: 0.65rem;">➔</span>
+                        
+                        <span class="m-dot" id="m-dot-${comp}-sanitizer"></span>
+                        <span class="m-step-text" id="m-text-${comp}-sanitizer">Sanitizer</span>
+                        <span style="color:#d2d2d7; font-size: 0.65rem;">➔</span>
+                        
+                        <span class="m-dot" id="m-dot-${comp}-analyzer"></span>
+                        <span class="m-step-text" id="m-text-${comp}-analyzer">Analyzer</span>
+                        <span style="color:#d2d2d7; font-size: 0.65rem;">➔</span>
+                        
+                        <span class="m-dot" id="m-dot-${comp}-qc"></span>
+                        <span class="m-step-text" id="m-text-${comp}-qc">QC</span>
+                    </div>
+                `;
+                gridContainer.appendChild(row);
+            });
+        }
+
+        function updateParallelStep(competitor, step, status) {
+            const dotEl = document.getElementById(`m-dot-${competitor}-${step}`);
+            const textEl = document.getElementById(`m-text-${competitor}-${step}`);
+            if (!dotEl || !textEl) return;
+
+            dotEl.className = 'm-dot';
+            textEl.className = 'm-step-text';
+
+            if (status === 'active') {
+                dotEl.classList.add('active');
+                textEl.classList.add('active');
+            } else if (status === 'completed') {
+                dotEl.classList.add('completed');
+                textEl.classList.add('completed');
+            } else if (status === 'failed') {
+                dotEl.classList.add('failed');
+                textEl.classList.add('failed');
+            }
+        }
+
+        // 启动竞品分析大盘任务
+        function startAnalysis() {
+            switchPage('console');
+            const startBtn = document.getElementById('start-btn');
+            
+            let requestUrl = 'http://localhost:8000/api/analyze';
+            let requestBody = {};
+            let competitors = [];
+
+            if (currentTab === 'manual') {
+                const checkboxes = document.querySelectorAll('.config-columns input:checked');
+                competitors = Array.from(checkboxes).map(cb => cb.value);
+
+                if (competitors.length === 0) {
+                    showToast("请至少勾选一个目标竞品！", "warning");
+                    return;
+                }
+                requestBody = { competitors };
+            } else {
+                const queryText = document.getElementById('smart-query-input').value.trim();
+                if (!queryText) {
+                    showToast("请输入您的智能分析需求场景！", "warning");
+                    return;
+                }
+                requestUrl = 'http://localhost:8000/api/analyze/smart';
+                requestBody = { query: queryText };
+            }
+
+            startBtn.disabled = true;
+            resetDAGNodes();
+            
+            if (currentTab === 'manual') {
+                initParallelMonitorGrid(competitors);
+            } else {
+                const monitorCard = document.getElementById('parallel-monitor-card');
+                monitorCard.style.display = 'none';
+            }
+
+            reportArchive = {};
+            document.getElementById('report-box').innerHTML = `
+                <div class="empty-placeholder">
+                    <p style="color: var(--apple-blue);">⚡ 并发多 Agent 级联引擎启动，正在建立并行线程池订阅流...</p>
+                </div>
+            `;
+
+            // 同步清空 Agent Trace 卡片面板与右侧就地报告预览区
+            const timelineContainer = document.getElementById('trace-timeline-container');
+            if (timelineContainer) {
+                timelineContainer.innerHTML = `
+                    <div class="empty-placeholder" style="padding: 3rem 1.5rem; font-size: 0.82rem; text-align: center; color: var(--text-secondary);">
+                        <p style="opacity: 0.7; line-height: 1.5;">⚡ 并发多 Agent 级联引擎启动，正在建立并行线程池订阅流...</p>
+                    </div>
+                `;
+            }
+            const previewBox = document.getElementById('report-preview-box');
+            if (previewBox) {
+                previewBox.innerHTML = `
+                    <div class="empty-placeholder-glow" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; color: var(--text-secondary); padding: 4rem 1.5rem;">
+                        <div class="pulsing-brain" style="font-size: 3.5rem; margin-bottom: 1.5rem; animation: pulse-glow 2s infinite ease-in-out;">🧠</div>
+                        <h3 style="font-size: 1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">多 Agent 智能协同分析报告大屏</h3>
+                        <p style="font-size: 0.8rem; max-width: 280px; line-height: 1.45; opacity: 0.8;">正在建立连接，请等待数据流经过多路抽取与强契约质检审核后就地渲染...</p>
+                    </div>
+                `;
+            }
+
+            if (currentTab === 'manual') {
+                logToConsole('SYSTEM', `多线程并发工作流拉起！并发分析目标: [${competitors.join(', ')}]`);
+            } else {
+                logToConsole('SYSTEM', `智能场景分析启动！输入需求: "${requestBody.query}"`);
+            }
+
+            // 流式连接 SSE
+            fetch(requestUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP 异常: ${response.status}`);
+                }
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+
+                function readStream() {
+                    return reader.read().then(({ done, value }) => {
+                        if (done) {
+                            logToConsole('SYSTEM', '多线程并发数据流接收完毕，HarnessFlow 竞品对比归档就绪。');
+                            startBtn.disabled = false;
+                            return;
+                        }
+                        
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n\n');
+                        buffer = lines.pop();
+
+                        lines.forEach(line => {
+                            if (line.trim().startsWith('data:')) {
+                                try {
+                                    const eventData = JSON.parse(line.replace('data:', '').trim());
+                                    processWorkflowEvent(eventData);
+                                } catch (e) {
+                                    console.error("解析并发事件失败: ", e);
+                                }
+                            }
+                        });
+
+                        return readStream();
+                    });
+                }
+                return readStream();
+            })
+            .catch(err => {
+                logToConsole('SYSTEM', `连接后端服务失败: ${err.message}。请核准 Docker/FastAPI 后端是否已拉起！`, true);
+                document.getElementById('report-box').innerHTML = `
+                    <div class="empty-placeholder" style="color: var(--color-qc);">
+                        <p>🛑 联调中断: 无法连接至 FastAPI 服务端 (localhost:8000)。请核准 Docker/FastAPI 后端是否已拉起！</p>
+                    </div>
+                `;
+                startBtn.disabled = false;
+            });
+        }
+
+        // 处理流式工作流派发出来的状态事件
+        function processWorkflowEvent(data) {
+            const ev = data.event;
+            const node = data.node;
+            const competitor = data.competitor;
+            const state = data.state;
+
+            if (ev === 'workflow_start') {
+                logToConsole('SYSTEM', `[HarnessFlow] 级联工作流拓扑并发线程池拉起。`);
+                const timelineContainer = document.getElementById('trace-timeline-container');
+                if (timelineContainer) timelineContainer.innerHTML = '';
+                showThinkingScreen(); // 初始化思考画面
+                if (currentTab === 'manual') {
+                    setNodeStatus('collector', 'active');
+                } else {
+                    setNodeStatus('requirement_parser', 'active');
+                }
+            } 
+            else if (ev === 'node_start') {
+                // 1. 更新主 DAG 的高亮与高亮边
+                resetNodeEdgeHighlights(node);
+                setNodeStatus(node, 'active');
+                
+                // 2. 更新脑部神经元可视化高亮 & 思考界面 Agent 状态
+                highlightBrainNode(node);
+                updateThinkingUI(node, 'active');
+
+                // 3. 更新并发网格状态
+                if (competitor && competitor !== 'ALL') {
+                    updateParallelStep(competitor, node, 'active');
+                }
+
+                // 4. 流式追加或更新 Agent Trace 卡片轨迹
+                updateTraceTimeline('node_start', node, competitor, state);
+                
+                if (node === 'requirement_parser') {
+                    logToConsole('[Parser]', `启动 Preprocessing: 需求提取 Agent 正在理解用户业务诉求。`);
+                } else if (node === 'competitor_discovery') {
+                    logToConsole('[Discovery]', `启动 Preprocessing: 竞品发现 Agent 正在智能检索与匹配推荐厂商。`);
+                } else if (node === 'planner') {
+                    logToConsole('[Planner]', `启动编排规划 Agent，定制并行执行流水线计划。`);
+                } else if (node === 'collector') {
+                    logToConsole(`[${competitor}][Collector]`, `向仿真 Mock 服务器拉取网页原始语料。`);
+                } else if (node === 'sanitizer') {
+                    logToConsole(`[${competitor}][Sanitizer]`, `完成敏感手机电话与泄露 API Key 的脱敏过滤。`);
+                } else if (node === 'analyzer') {
+                    const retries = state.retry_count || 0;
+                    if (retries > 0) {
+                        logToConsole(`[${competitor}][Analyzer]`, `🛑 [QC 拦截重抽] 发现必填字段缺失，进行第 ${retries} 次深入上下文重抽...`, true);
+                    } else {
+                        logToConsole(`[${competitor}][Analyzer]`, `智能抽取定价、并发、口碑及 CodingPlan 强契约字段。`);
+                    }
+                } else if (node === 'qc') {
+                    logToConsole(`[${competitor}][QC]`, `校验 Pydantic 数据契约，拦截大模型幻觉。`);
+                } else if (node === 'writer') {
+                    logToConsole('SYSTEM', `[Writer] 正在整合已过审的竞品档案，撰写三大对比大盘与审计报告。`);
+                    // 留在控制台主页面以展示右侧第三列的就地渲染效果
+                }
+            } 
+            else if (ev === 'node_end') {
+                // 流式更新 Agent Trace 卡片轨迹
+                updateTraceTimeline('node_end', node, competitor, state);
+
+                if (competitor && competitor !== 'ALL') {
+                    const status = (state.validation_verdict === false && node === 'qc') ? 'failed' : 'completed';
+                    updateParallelStep(competitor, node, status);
+                }
+
+                // 更新思考画面 Agent 状态
+                let status = 'completed';
+                if (state.validation_verdict === false && node === 'qc') {
+                    status = 'failed';
+                }
+                updateThinkingUI(node, status);
+
+                if (node === 'requirement_parser') {
+                    setNodeStatus('requirement_parser', 'completed');
+                    const req = state.parsed_requirement || {};
+                    logToConsole('[Parser]', `需求解析完成！场景属性: <span style="color:var(--apple-blue); font-weight:600;">${req.scenario || "general"}</span>, 语言偏好: [${(req.language_preference || []).join(', ')}]`);
+                } else if (node === 'competitor_discovery') {
+                    setNodeStatus('competitor_discovery', 'completed');
+                    const vendors = state.recommended_vendors || [];
+                    const names = vendors.map(v => v.vendor_name);
+                    logToConsole('[Discovery]', `竞品推荐完成！智能推荐厂商: <span style="color:#137333; font-weight:600;">${names.join(', ')}</span>`);
+                    
+                    // 动态初始化并发监视器
+                    initParallelMonitorGrid(names);
+                } else if (node === 'planner') {
+                    setNodeStatus('planner', 'completed');
+                    const plan = state.execution_plan || {};
+                    logToConsole('[Planner]', `执行规划编排完成！决策路径: <strong style="color:var(--apple-blue);">${plan.plan_type || "standard"}</strong>`);
+                    if (plan.plan_type === 'cache_hit') {
+                        logToConsole('[Planner]', `🎯 发现历史评测报告可安全复用，触发极速缓存命中流转通道！`);
+                    }
+                } else if (state.validation_verdict === false && node === 'qc') {
+                    setNodeStatus('qc', 'failed');
+                    setNodeStatus('analyzer', 'failed');
+                    
+                    if (competitor && competitor !== 'ALL') {
+                        updateParallelStep(competitor, 'analyzer', 'failed');
+                    }
+
+                    const rejectLine = document.getElementById('edge-reject');
+                    rejectLine.style.display = 'block';
+                    rejectLine.className = 'edge-path qc-reject';
+                    
+                    // 广播拦截红横幅至可观测终端
+                    const consoleBody = document.getElementById('console-logs');
+                    const banner = document.createElement('div');
+                    banner.className = 'qc-alert-banner';
+                    banner.innerHTML = `
+                        <strong>🛑 [QC 强契约拦截打回]</strong> [${competitor}] 数据未通过 Pydantic 核验！<br>
+                        <strong>异常反馈：</strong>${state.feedback || "必填字段缺失"}
+                    `;
+                    consoleBody.appendChild(banner);
+                    consoleBody.scrollTop = consoleBody.scrollHeight;
+                    
+                    logToConsole(`[${competitor}][QC]`, `检测到属性结构异常，拦截打回！`, true);
+                } else {
+                    setNodeStatus(node, 'completed');
+                    if (node === 'qc') {
+                        logToConsole(`[${competitor}][QC-OK]`, `通过强校验，数据完美完整，成功锚定 SourceTrace。`);
+                        document.getElementById('edge-reject').style.display = 'none';
+                    }
+                }
+            } 
+            else if (ev === 'workflow_complete') {
+                // 流式更新最后的 Writer 卡片为成功
+                updateTraceTimeline('node_end', 'writer', 'ALL', state);
+
+                resetDAGNodes();
+                
+                // 将所有节点都标记为已完成
+                const allNodes = ['requirement_parser', 'competitor_discovery', 'planner', 'collector', 'sanitizer', 'analyzer', 'qc', 'writer'];
+                allNodes.forEach(n => setNodeStatus(n, 'completed'));
+
+                // 激活所有的边
+                const allEdges = ['edge-p1', 'edge-p2', 'edge-p3', 'edge-1', 'edge-2', 'edge-3', 'edge-4'];
+                allEdges.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.add('active');
+                });
+                
+                // 并发网格所有行标绿
+                const gridRows = document.querySelectorAll('.monitor-row');
+                gridRows.forEach(row => {
+                    const compName = row.id.replace('parallel-row-', '');
+                    ['collector', 'sanitizer', 'analyzer', 'qc'].forEach(s => {
+                        updateParallelStep(compName, s, 'completed');
+                    });
+                });
+
+                logToConsole('SYSTEM', '🎉 并发线程池 Scatter-Gather 级联全部平稳收工！生成最终成果。');
+                
+                activeReportId = state.cache_key || "temp_report_" + Date.now();
+                
+                // 获取当前分析的目标竞品列表以绑定反馈
+                if (currentTab === 'manual') {
+                    const checkboxes = document.querySelectorAll('.config-columns input:checked');
+                    currentVendorList = Array.from(checkboxes).map(cb => cb.value);
+                } else {
+                    const gridRows = document.querySelectorAll('.monitor-row');
+                    currentVendorList = Array.from(gridRows).map(row => row.id.replace('parallel-row-', ''));
+                }
+
+                reportArchive = state.reports_archive || {};
+                renderScenarioAnalysisCard(state.scenario_analysis);
+                renderMarkdownReport(state.final_markdown_report);
+
+                loadHistoryList();
+            }
+            else if (ev === 'workflow_error') {
+                logToConsole('SYSTEM', `工作流执行异常中断: ${data.message}`, true);
+                resetDAGNodes();
+                document.getElementById('report-box').innerHTML = `
+                    <div class="empty-placeholder" style="color: var(--color-qc);">
+                        <p>🛑 分析异常中止: ${data.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function resetNodeEdgeHighlights(activeNode) {
+            // 重置所有的边
+            const edges = ['edge-p1', 'edge-p2', 'edge-p3', 'edge-1', 'edge-2', 'edge-3', 'edge-4'];
+            edges.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.className = 'edge-path';
+            });
+            document.getElementById('edge-reject').style.display = 'none';
+
+            if (activeNode === 'requirement_parser') {
+                setEdgeActive('edge-p1', true);
+            } else if (activeNode === 'competitor_discovery') {
+                setEdgeActive('edge-p1', true);
+                setEdgeActive('edge-p2', true);
+            } else if (activeNode === 'planner') {
+                setEdgeActive('edge-p1', true);
+                setEdgeActive('edge-p2', true);
+                setEdgeActive('edge-p3', true);
+            } else if (activeNode === 'collector') {
+                setEdgeActive('edge-p1', true);
+                setEdgeActive('edge-p2', true);
+                setEdgeActive('edge-p3', true);
+            } else if (activeNode === 'sanitizer') {
+                setEdgeActive('edge-p1', true);
+                setEdgeActive('edge-p2', true);
+                setEdgeActive('edge-p3', true);
+                setEdgeActive('edge-1', true);
+            } else if (activeNode === 'analyzer') {
+                setEdgeActive('edge-p1', true);
+                setEdgeActive('edge-p2', true);
+                setEdgeActive('edge-p3', true);
+                setEdgeActive('edge-1', true);
+                setEdgeActive('edge-2', true);
+            } else if (activeNode === 'qc') {
+                setEdgeActive('edge-p1', true);
+                setEdgeActive('edge-p2', true);
+                setEdgeActive('edge-p3', true);
+                setEdgeActive('edge-1', true);
+                setEdgeActive('edge-2', true);
+                setEdgeActive('edge-3', true);
+            } else if (activeNode === 'writer') {
+                edges.forEach(id => setEdgeActive(id, true));
+            }
+        }
+
+        // ==========================================
+        // ⭐ 星级反馈交互与闭环 Learning Node
+        // ==========================================
+        function rateReport(rating, isPreview = false) {
+            selectedRating = rating;
+            const starClass = isPreview ? '.star-btn-preview' : '.star-btn';
+            const stars = document.querySelectorAll(starClass);
+            stars.forEach((star, idx) => {
+                if (idx < rating) {
+                    star.style.color = '#ff9500';
+                } else {
+                    star.style.color = '#d2d2d7';
+                }
+            });
+            const ratingTexts = {
+                1: "极不满意 (1星)",
+                2: "不够准确 (2星)",
+                3: "基本满足 (3星)",
+                4: "内容详实 (4星)",
+                5: "无可挑剔 (5星)"
+            };
+            const textId = isPreview ? 'rating-text-preview' : 'rating-text';
+            const textEl = document.getElementById(textId);
+            if (textEl) {
+                textEl.innerText = ratingTexts[rating] || `已评分: ${rating}星`;
+                textEl.style.color = 'var(--apple-blue)';
+            }
+        }
+
+        function submitFeedback(isPreview = false) {
+            if (selectedRating === 0) {
+                showToast("请先进行星级评分！", "warning");
+                return;
+            }
+
+            const commentsId = isPreview ? 'feedback-comments-preview' : 'feedback-comments';
+            const submitBtnId = isPreview ? 'submit-feedback-btn-preview' : 'submit-feedback-btn';
+            const commentsEl = document.getElementById(commentsId);
+            const submitBtn = document.getElementById(submitBtnId);
+            const comments = commentsEl ? commentsEl.value.trim() : "";
+            if (submitBtn) submitBtn.disabled = true;
+
+            const payload = {
+                report_id: activeReportId || "temp_report_" + Date.now(),
+                rating: selectedRating,
+                comments: comments,
+                vendor_list: currentVendorList
+            };
+
+            fetch('http://localhost:8000/api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("提交反馈错误");
+                return res.json();
+            })
+            .then(data => {
+                showToast("✓ 感谢您的评分反馈！历史分析大盘已与反馈闭环关联。", "success");
+                const widgetSelector = isPreview ? '#report-preview-box .feedback-widget' : '#report-box .feedback-widget';
+                const feedbackWidget = document.querySelector(widgetSelector);
+                if (feedbackWidget) {
+                    feedbackWidget.innerHTML = `
+                        <div style="text-align: center; padding: 1rem; color: #137333; font-weight: 600;">
+                            ✓ 反馈已成功提交！感谢您对 HarnessFlow LLM 评测大盘的持续完善贡献。
+                        </div>
+                    `;
+                }
+                loadHistoryList();
+            })
+            .catch(err => {
+                showToast("反馈提交失败: " + err.message, "error");
+                if (submitBtn) submitBtn.disabled = false;
+            });
+        }
+
+        function appendFeedbackPanel(targetBox) {
+            const existing = targetBox.querySelector('.feedback-widget');
+            if (existing) existing.remove();
+
+            const isPreview = targetBox.id === 'report-preview-box';
+            const commentsId = isPreview ? 'feedback-comments-preview' : 'feedback-comments';
+            const submitBtnId = isPreview ? 'submit-feedback-btn-preview' : 'submit-feedback-btn';
+            const starClass = isPreview ? 'star-btn-preview' : 'star-btn';
+            const ratingTextId = isPreview ? 'rating-text-preview' : 'rating-text';
+
+            const feedbackHtml = `
+                <div class="glass-card feedback-widget" style="margin-top: 2rem; padding: 1.5rem; border: 1px dashed var(--apple-blue); border-radius: 12px; background: rgba(0, 113, 227, 0.02);">
+                    <h3 style="margin-top: 0; font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                        <span>⭐ 评估反馈与闭环优化</span>
+                        <span style="font-size: 0.75rem; font-weight: 500; background: rgba(0, 113, 227, 0.08); color: var(--apple-blue); padding: 2px 6px; border-radius: 4px;">Learning Node</span>
+                    </h3>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">如果您对分析结果满意或有改进建议，请为报告进行星级评分，这有助于优化系统的多属性评估指标。</p>
+                    
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                        <span class="${starClass}" data-value="1" onclick="rateReport(1, ${isPreview})" style="font-size: 1.5rem; cursor: pointer; color: #d2d2d7; transition: color 0.2s;">★</span>
+                        <span class="${starClass}" data-value="2" onclick="rateReport(2, ${isPreview})" style="font-size: 1.5rem; cursor: pointer; color: #d2d2d7; transition: color 0.2s;">★</span>
+                        <span class="${starClass}" data-value="3" onclick="rateReport(3, ${isPreview})" style="font-size: 1.5rem; cursor: pointer; color: #d2d2d7; transition: color 0.2s;">★</span>
+                        <span class="${starClass}" data-value="4" onclick="rateReport(4, ${isPreview})" style="font-size: 1.5rem; cursor: pointer; color: #d2d2d7; transition: color 0.2s;">★</span>
+                        <span class="${starClass}" data-value="5" onclick="rateReport(5, ${isPreview})" style="font-size: 1.5rem; cursor: pointer; color: #d2d2d7; transition: color 0.2s;">★</span>
+                        <span id="${ratingTextId}" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem;">请选择评分</span>
+                    </div>
+                    
+                    <textarea id="${commentsId}" placeholder="输入您对报告结果的改进意见（选填）..." style="width: 100%; height: 70px; padding: 0.5rem; border: 1px solid var(--card-border); border-radius: 8px; background: rgba(255, 255, 255, 0.6); font-size: 0.8rem; resize: none; margin-bottom: 1rem; outline: none; font-family: inherit; transition: border-color 0.2s;"></textarea>
+                    
+                    <button class="action-btn" id="${submitBtnId}" onclick="submitFeedback(${isPreview})" style="width: auto; padding: 0.4rem 1.2rem; font-size: 0.8rem; height: auto; margin-top: 0; display: inline-block;">
+                        <span>提交反馈</span>
+                    </button>
+                </div>
+            `;
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = feedbackHtml;
+            targetBox.appendChild(tempDiv.firstElementChild);
+            selectedRating = 0;
+        }
+
+        // ==========================================
+        // 📂 历史记录拉取与缓存复用
+        // ==========================================
+        function loadHistoryList() {
+            const container = document.getElementById('history-items-container');
+            
+            fetch('http://localhost:8000/api/knowledge/history')
+            .then(res => {
+                if (!res.ok) throw new Error("历史加载失败");
+                return res.json();
+            })
+            .then(resData => {
+                const history = resData.data || [];
+                if (history.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-placeholder" style="padding: 1.5rem; font-size: 0.8rem; text-align: center; color: var(--text-secondary);">
+                            📥 暂无历史分析大盘沉淀。
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = '';
+                history.forEach(item => {
+                    const time = new Date(item.cached_at);
+                    const timeStr = `${time.getFullYear()}-${String(time.getMonth()+1).padStart(2,'0')}-${String(time.getDate()).padStart(2,'0')} ${String(time.getHours()).padStart(2,'0')}:${String(time.getMinutes()).padStart(2,'0')}`;
+                    
+                    const vendorPills = item.vendor_list.map(v => 
+                        `<span style="background: rgba(0, 113, 227, 0.05); color: var(--apple-blue); border: 1px solid rgba(0,113,227,0.1); padding: 1px 4px; border-radius: 4px; font-size: 0.7rem; font-weight: 500; margin-right: 3px; display: inline-block;">${v}</span>`
+                    ).join('');
+
+                    const scenarioText = item.scenario ? `🎯 场景: ${item.scenario}` : "🌐 全面评测";
+
+                    const card = document.createElement('div');
+                    card.className = 'history-item';
+                    card.style.cssText = "border-bottom: 1px solid var(--card-border); padding: 0.75rem 1rem; cursor: pointer; transition: background 0.2s;";
+                    card.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+                            <span>${timeStr}</span>
+                            <span style="color: var(--apple-blue); font-weight: 600;">Hit: ${item.hit_count}</span>
+                        </div>
+                        <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.4rem;">
+                            ${scenarioText}
+                        </div>
+                        <div>
+                            ${vendorPills}
+                        </div>
+                    `;
+                    card.onclick = () => restoreHistoryItem(item.cache_key);
+                    container.appendChild(card);
+                });
+            })
+            .catch(err => {
+                container.innerHTML = `
+                    <div style="padding: 1rem; font-size: 0.8rem; color: var(--color-qc); text-align: center;">
+                        ⚠️ 历史记录加载异常: ${err.message}
+                    </div>
+                `;
+            });
+        }
+
+        function restoreHistoryItem(cacheKey) {
+            logToConsole('SYSTEM', `正在从知识库复原历史报告 [${cacheKey}]...`);
+            
+            fetch(`http://localhost:8000/api/knowledge/history/${cacheKey}`)
+            .then(res => {
+                if (!res.ok) throw new Error("加载历史详情失败");
+                return res.json();
+            })
+            .then(resData => {
+                const data = resData.data;
+                if (!data) throw new Error("报告详情为空");
+
+                activeReportId = cacheKey;
+                currentVendorList = data.vendor_list || [];
+
+                // 瞬间高亮全部节点为 completed
+                resetDAGNodes();
+                const nodes = ['node-requirement_parser', 'node-competitor_discovery', 'node-planner', 'node-collector', 'node-sanitizer', 'node-analyzer', 'node-qc', 'node-writer'];
+                nodes.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.add('completed');
+                });
+                
+                // 激活所有的边
+                const edges = ['edge-p1', 'edge-p2', 'edge-p3', 'edge-1', 'edge-2', 'edge-3', 'edge-4'];
+                edges.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.add('active');
+                });
+
+                // 初始化并发监视器
+                initParallelMonitorGrid(currentVendorList);
+                currentVendorList.forEach(comp => {
+                    ['collector', 'sanitizer', 'analyzer', 'qc'].forEach(step => {
+                        updateParallelStep(comp, step, 'completed');
+                    });
+                });
+
+                // 渲染最终 Markdown 报告 (历史载入无需流式打字)
+                renderMarkdownReport(data.final_report, false);
+
+                logToConsole('SYSTEM', `🎯 从历史知识库复原报告 [${cacheKey}] 完成！所有节点自动标绿并通过时效性审核。`);
+            })
+            .catch(err => {
+                logToConsole('SYSTEM', `复原历史报告失败: ${err.message}`, true);
+                showToast("复原失败: " + err.message, "error");
+            });
+        }
+
+        function compileMarkdownToHtml(mdText) {
+            if (!mdText) return "";
+
+            let html = mdText;
+
+            // 基础标签正则
+            html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+            html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^\>\s*(.+)$/gm, '<blockquote>$1</blockquote>');
+            html = html.replace(/^\-\s*(.+)$/gm, '<li>$1</li>');
+            html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+
+            // 精准表格解析
+            const tableRegex = /\|(.+)\|[\r\n]+\|([-:\s|]+)\|[\r\n]+((?:\|.+[\r\n]+)+)/g;
+            html = html.replace(tableRegex, function(match, headerLine, alignLine, rowsText) {
+                const headers = headerLine.split('|').map(x => x.trim()).filter(x => x !== '');
+                const rows = rowsText.trim().split('\n').map(row => {
+                    return row.split('|').map(x => x.trim()).filter(x => x !== '');
+                }).filter(r => r.length > 0);
+
+                let tableHtml = '<table><thead><tr>';
+                headers.forEach(h => {
+                    tableHtml += `<th>${h}</th>`;
+                });
+                tableHtml += '</tr></thead><tbody>';
+
+                rows.forEach(r => {
+                    tableHtml += '<tr>';
+                    r.forEach(td => {
+                        let tdStyled = td;
+                        if (td.startsWith('⭐')) {
+                            tdStyled = `<span style="background: rgba(245,166,35,0.06); border: 1px solid rgba(245,166,35,0.2); color: #b06000; padding: 3px 8px; border-radius: 20px; font-weight: 700; font-size: 0.8rem;">${td}</span>`;
+                        }
+                        if (td.includes('优势') || (headers.some(h => h.includes('优势')) && !td.startsWith('⭐'))) {
+                            const items = td.split('、');
+                            tdStyled = items.map(i => `<span style="background: rgba(52,199,89,0.06); border: 1px solid rgba(52,199,89,0.18); color: #137333; padding: 2px 6px; border-radius: 6px; font-size: 0.76rem; font-weight: 500; margin-right: 4px; display: inline-block; margin-bottom: 2px;">${i}</span>`).join('');
+                        }
+                        if (td.includes('吐槽') || (headers.some(h => h.includes('痛点')) && !td.startsWith('⭐'))) {
+                            const items = td.split('、');
+                            tdStyled = items.map(i => `<span style="background: rgba(255,69,58,0.05); border: 1px solid rgba(255,69,58,0.18); color: #d71919; padding: 2px 6px; border-radius: 6px; font-size: 0.76rem; font-weight: 500; margin-right: 4px; display: inline-block; margin-bottom: 2px;">${i}</span>`).join('');
+                        }
+                        if (td.startsWith('`') && td.endsWith('`')) {
+                            const langs = td.replace(/`/g, '').split(', ');
+                            tdStyled = langs.map(l => `<code style="background: rgba(0, 113, 227, 0.04); color: var(--apple-blue); border: 1px solid rgba(0,113,227,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-right: 3px; font-family: monospace;">${l}</code>`).join('');
+                        }
+                        tableHtml += `<td>${tdStyled}</td>`;
+                    });
+                    tableHtml += '</tr>';
+                });
+                tableHtml += '</tbody></table>';
+                return tableHtml;
+            });
+
+            // 证据源 Trace 溯源高亮关联
+            const traceRegex = /字段\s*`([^`]+)`\s*证据定位：[\r\n\s]+&gt;\s*“\*([^*]+)\*”[\r\n\s]+&gt;\s*📄\s*网页数据来源:\s*\[([^\]]+)\]\(([^)]+)\)/g;
+            html = html.replace(traceRegex, function(match, fieldPath, snippet, urlText, urlLink) {
+                let competitorName = "2026旗舰";
+                if (urlLink.includes('openai')) competitorName = "OpenAI";
+                else if (urlLink.includes('doubao')) competitorName = "火山引擎";
+                else if (urlLink.includes('claude')) competitorName = "Anthropic";
+                else if (urlLink.includes('deepseek')) competitorName = "深度求索";
+                else if (urlLink.includes('google')) competitorName = "Google";
+                else if (urlLink.includes('mistral')) competitorName = "Mistral AI";
+                else if (urlLink.includes('zhipu')) competitorName = "智谱AI";
+                else if (urlLink.includes('qwen')) competitorName = "阿里通义千问";
+                else if (urlLink.includes('xai') || urlLink.includes('grok')) competitorName = "xAI";
+                else if (urlLink.includes('meta') || urlLink.includes('llama')) competitorName = "Meta";
+                else if (urlLink.includes('cohere')) competitorName = "Cohere";
+                else if (urlLink.includes('bedrock') || urlLink.includes('amazon')) competitorName = "Amazon Bedrock";
+                else if (urlLink.includes('baidu') || urlLink.includes('ernie')) competitorName = "百度文心";
+                else if (urlLink.includes('moonshot') || urlLink.includes('kimi')) competitorName = "月之暗面";
+                else if (urlLink.includes('yi')) competitorName = "零一万物";
+                else if (urlLink.includes('sensetime') || urlLink.includes('sensechat')) competitorName = "商汤科技";
+
+                return `
+                    <div class="trace-card" style="background: #f5f5f7; border: 1px solid var(--card-border); border-radius: 10px; padding: 0.75rem 1.25rem; margin: 0.75rem 0; opacity: 0; transform: translateY(10px); transition: all 0.5s ease;">
+                        <span style="font-size: 0.8rem; font-weight: 700; color: var(--apple-blue);">
+                            🎯 [可信数据溯源] ${competitorName} · <code>${fieldPath}</code>
+                        </span>
+                        <div style="font-style: italic; color: var(--text-primary); margin: 0.35rem 0; padding-left: 0.65rem; border-left: 2px solid var(--apple-blue);">
+                            “${snippet}”
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                            📄 证据原网页: <a class="source-trace-link" onclick="showTraceTooltip(event, '${competitorName}', '${fieldPath}', '${snippet}', '${urlLink}')">${urlLink}</a>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // 统一修饰布尔标签与脱敏标签
+            html = html.replace(/✅ 支持/g, '<span style="color: #137333; font-weight: 600;">✅ 支持</span>');
+            html = html.replace(/✅ 支持嵌入/g, '<span style="background: rgba(52,199,89,0.06); color: #137333; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">✅ IDE 支持</span>');
+            html = html.replace(/✅ 提供沙盒/g, '<span style="background: rgba(0,113,227,0.06); color: var(--apple-blue); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🟢 提供 Sandbox</span>');
+            html = html.replace(/❌ 不支持/g, '<span style="color: #c5221f; font-weight: 500; opacity: 0.8;">❌ 不支持</span>');
+            html = html.replace(/❌ 无沙盒/g, '<span style="color: var(--text-secondary); font-size: 0.75rem;">❌ 无沙盒</span>');
+            html = html.replace(/已合规脱敏/g, '<span style="background: rgba(52,199,89,0.08); color: #137333; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">🛡️ 已脱敏合规</span>');
+
+            return html;
+        }
+
+        function renderScenarioAnalysisCard(analysis) {
+            if (!analysis || !analysis.scenario_name) return;
+            // 移去强制切页，使用户与评委在控制大屏中专注于三大分栏的协作演进
+            const reportBox = document.getElementById('report-box');
+            const previewBox = document.getElementById('report-preview-box');
+
+            const topVendors = analysis.top_vendors || [];
+            let rankingHtml = '';
+            if (topVendors.length > 0) {
+                const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+                rankingHtml = topVendors.slice(0, 5).map((v, i) => {
+                    const scores = (v.key_scores || []).join(' · ');
+                    return `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0;border-bottom:1px solid rgba(0,0,0,0.04);">
+                        <span style="font-size:1.2rem;">${medals[i] || ''}</span>
+                        <span style="font-weight:600;min-width:5rem;">${v.vendor}</span>
+                        <span style="background:var(--apple-blue);color:#fff;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:600;">${v.score.toFixed(1)}分</span>
+                        <span style="color:var(--text-secondary);font-size:0.8rem;">${scores}</span>
+                    </div>`;
+                }).join('');
+            }
+
+            const llmText = analysis.llm_analysis || analysis.advice || '';
+            const cardHtml = `
+                <div data-scenario-card style="background:linear-gradient(135deg,rgba(0,113,227,0.04),rgba(52,199,89,0.04));border:1px solid rgba(0,113,227,0.12);border-radius:16px;padding:1.5rem 2rem;margin-bottom:1.5rem;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
+                        <span style="font-size:1.3rem;">💡</span>
+                        <span style="font-size:1.05rem;font-weight:700;color:var(--text-primary);">场景智能推荐 · ${analysis.scenario_name}</span>
+                        <span style="margin-left:auto;font-size:0.75rem;color:var(--text-secondary);background:rgba(0,0,0,0.04);padding:3px 10px;border-radius:8px;">${analysis.raw_query || ''}</span>
+                    </div>
+                    ${llmText ? `<p style="color:var(--text-primary);line-height:1.7;font-size:0.9rem;margin-bottom:1rem;">${llmText}</p>` : ''}
+                    ${rankingHtml ? `<div style="margin-top:0.5rem;">${rankingHtml}</div>` : ''}
+                </div>
+            `;
+            if (reportBox) reportBox.innerHTML = cardHtml;
+            if (previewBox) previewBox.innerHTML = cardHtml;
+        }
+
+        // 高精 DOM-Safe Markdown 报告打字机流式渲染与 Badge 徽章修饰
+        function renderMarkdownReport(mdText, isStreaming = true) {
+            if (!mdText) return;
+
+            const reportBox = document.getElementById('report-box');
+            const previewBox = document.getElementById('report-preview-box');
+            const compiledHtml = compileMarkdownToHtml(mdText);
+
+            // 如果不需要打字机效果（如从历史载入），立即渲染
+            if (!isStreaming) {
+                if (reportBox) {
+                    reportBox.innerHTML += compiledHtml;
+                    appendFeedbackPanel(reportBox);
+                }
+                if (previewBox) {
+                    previewBox.innerHTML += compiledHtml;
+                    appendFeedbackPanel(previewBox);
+                }
+                return;
+            }
+
+            // 使用 DOMParser 进行完全隔离的安全树分叉解析，防打字机中途断签布局崩溃
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(`<div>${compiledHtml}</div>`, 'text/html');
+            const root = doc.body.firstChild;
+            const elements = Array.from(root.children);
+
+            // 保留已有的场景分析卡片，仅清除旧报告内容
+            const existingCards = reportBox ? reportBox.querySelectorAll('[data-scenario-card]') : [];
+            if (reportBox) {
+                reportBox.innerHTML = '';
+                existingCards.forEach(card => reportBox.appendChild(card));
+            }
+
+            const existingPreviewCards = previewBox ? previewBox.querySelectorAll('[data-scenario-card]') : [];
+            if (previewBox) {
+                previewBox.innerHTML = '';
+                existingPreviewCards.forEach(card => previewBox.appendChild(card));
+            }
+
+            let elementIndex = 0;
+
+            function renderNextElement() {
+                if (elementIndex >= elements.length) {
+                    if (reportBox) appendFeedbackPanel(reportBox);
+                    if (previewBox) appendFeedbackPanel(previewBox);
+                    return;
+                }
+
+                const originalEl = elements[elementIndex];
+                elementIndex++;
+
+                const tagName = originalEl.tagName.toLowerCase();
+
+                // 纯文本、段落和引用卡片：进行逐字平滑渲染
+                if (['h1', 'h2', 'h3', 'p', 'blockquote', 'li'].includes(tagName)) {
+                    const newEl1 = reportBox ? document.createElement(originalEl.tagName) : null;
+                    if (newEl1) {
+                        Array.from(originalEl.attributes).forEach(attr => {
+                            newEl1.setAttribute(attr.name, attr.value);
+                        });
+                        reportBox.appendChild(newEl1);
+                    }
+
+                    const newEl2 = previewBox ? document.createElement(originalEl.tagName) : null;
+                    if (newEl2) {
+                        Array.from(originalEl.attributes).forEach(attr => {
+                            newEl2.setAttribute(attr.name, attr.value);
+                        });
+                        previewBox.appendChild(newEl2);
+                    }
+
+                    const fullText = originalEl.innerHTML;
+                    let charIndex = 0;
+                    let currentHtml = '';
+
+                    function typeCharacter() {
+                        if (charIndex >= fullText.length) {
+                            renderNextElement();
+                            return;
+                        }
+
+                        if (fullText[charIndex] === '<') {
+                            const closingBracket = fullText.indexOf('>', charIndex);
+                            if (closingBracket !== -1) {
+                                currentHtml += fullText.slice(charIndex, closingBracket + 1);
+                                charIndex = closingBracket + 1;
+                            } else {
+                                currentHtml += fullText[charIndex];
+                                charIndex++;
+                            }
+                        } else {
+                            currentHtml += fullText[charIndex];
+                            charIndex++;
+                        }
+
+                        if (newEl1) newEl1.innerHTML = currentHtml;
+                        if (newEl2) newEl2.innerHTML = currentHtml;
+
+                        if (reportBox) reportBox.scrollTop = reportBox.scrollHeight;
+                        if (previewBox) previewBox.scrollTop = previewBox.scrollHeight;
+
+                        setTimeout(typeCharacter, 8); // 8ms 极速高刷响应
+                    }
+
+                    typeCharacter();
+                } else {
+                    // 复杂结构（如表格和溯源卡）：使用优雅的毛玻璃渐入淡化过渡，不打碎内部 DOM
+                    const clone1 = reportBox ? originalEl.cloneNode(true) : null;
+                    if (clone1) {
+                        clone1.style.opacity = '0';
+                        clone1.style.transform = 'translateY(10px)';
+                        clone1.style.transition = 'all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                        reportBox.appendChild(clone1);
+                        reportBox.scrollTop = reportBox.scrollHeight;
+                    }
+
+                    const clone2 = previewBox ? originalEl.cloneNode(true) : null;
+                    if (clone2) {
+                        clone2.style.opacity = '0';
+                        clone2.style.transform = 'translateY(10px)';
+                        clone2.style.transition = 'all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                        previewBox.appendChild(clone2);
+                        previewBox.scrollTop = previewBox.scrollHeight;
+                    }
+
+                    setTimeout(() => {
+                        if (clone1) {
+                            clone1.style.opacity = '1';
+                            clone1.style.transform = 'translateY(0)';
+                        }
+                        if (clone2) {
+                            clone2.style.opacity = '1';
+                            clone2.style.transform = 'translateY(0)';
+                        }
+                    }, 50);
+
+                    setTimeout(renderNextElement, 200); // 间隔极短，增强体验
+                }
+            }
+
+            renderNextElement();
+        }
+
+        // Apple HIG 白色极简浮窗 Tooltip 交互
+        function showTraceTooltip(e, competitor, field, snippet, url) {
+            const tooltip = document.getElementById('trace-tooltip');
+            
+            tooltip.innerHTML = `
+                <div class="tooltip-header">🔍 HarnessFlow 审计级数据核查</div>
+                <div style="font-size: 0.75rem; margin-bottom: 0.4rem; color: var(--text-secondary);">
+                    属性路径: <strong style="color: var(--text-primary);">${field}</strong>
+                </div>
+                <div class="tooltip-snippet">“${snippet}”</div>
+                <div class="tooltip-source">
+                    📄 原始页面: <a href="${url}" target="_blank" style="color: var(--apple-blue); text-decoration: none;">${url}</a>
+                </div>
+                <div style="font-size: 0.7rem; color: #137333; margin-top: 0.4rem; font-weight:500;">
+                    ✓ 强类型校验合规 · 证据跟踪无黑盒幻觉
+                </div>
+            `;
+
+            const rect = e.target.getBoundingClientRect();
+            tooltip.style.left = `${rect.left + window.scrollX - 10}px`;
+            tooltip.style.top = `${rect.bottom + window.scrollY + 8}px`;
+            
+            tooltip.classList.add('visible');
+
+            e.stopPropagation();
+            document.onclick = function() {
+                tooltip.classList.remove('visible');
+                document.onclick = null;
+            };
+        }
+    </script>
+</body>
+</html>
