@@ -41,11 +41,11 @@ DIM_DISPLAY_NAMES = {
 
 
 def _build_top_vendors_summary(rankings: List[dict], scenario: str, reports_archive: dict) -> str:
-    """构建 Top 3 厂商的场景化推荐摘要"""
+    """构建所有评估厂商的场景化推荐摘要"""
     if not rankings:
         return ""
 
-    top_n = rankings[:3]
+    top_n = rankings
     focus_dims = SCENARIO_FOCUS_DIMENSIONS.get(scenario, SCENARIO_FOCUS_DIMENSIONS["general"])
 
     lines = []
@@ -290,6 +290,23 @@ def scenario_analyst_node(state: dict) -> dict:
 
 ### 分析与整改
 说明原回答为什么跑偏（过度偏向通用指标与被低相关度 RAG 噪音污染），以及如何通过“引入严格的场景隔离、 score >= 0.20 强相关度阈值过滤、微调 data_analysis 专属评估权重、自适应按需生成 Appendix C BI 报表对比大盘”等策略来彻底规避外部噪音污染。"""
+        elif scenario == "document_analysis":
+            system_prompt += """
+同时，针对当前的「企业知识库问答与长文档检索」场景，你的选型建议输出格式和提取的能力维度必须严格符合以下 Markdown 结构：
+### 问题
+说明该场景要解决的是企业级知识库问答与长文档检索系统的大模型与产品能力选型问题。
+
+### 输出结果
+给出适合该场景的允许能力维度，候选模型类型、产品功能模块 and 推荐组合。
+- **允许的模型能力维度白名单 (Allowed Model Capabilities)**:
+  `long document understanding` (长文档理解), `semantic retrieval & hybrid search` (语义检索与混合检索), `document parsing & OCR` (文档解析与 OCR), `citation & source traceability` (引用与溯源追溯), `hallucination control & refusal` (幻觉控制与不知道拒答), `private deployment` (私有化部署支持), `access control & ACL` (权限隔离与 ACL), `VPC & data security` (数据不出域与 VPC 安全), `SLA stability` (SLA 稳定性保障).
+- **允许的产品功能维度白名单 (Allowed Product Capabilities)**:
+  `multi-format parsing (PDF/Word/Excel)` (多格式文档解析), `hybrid vector search & reranking` (混合向量检索与重排序), `document-level ACL access control` (文档级 ACL 权限控制), `source reference tag generation` (引用来源标识生成), `OA/Feishu/WeChat enterprise integration` (企业协同软件集成), `data desensitization & VPC gateway` (敏感数据脱敏与专属通道).
+- **拦截的禁用噪音列表 (Forbidden noise)**:
+  严禁提及 `code IDE assistant` (IDE 编程助手), `coding plan` (编码计划), `programming language benchmark` (编程基准测试), `generic model ranking` (通用模型排名), `model news appendix` (模型快讯附录)。
+
+### 分析与整改
+说明原回答为什么跑偏（过度偏向通用大模型指标，忽略了企业知识库专属的 RAG 召回、文档解析、权限隔离、数据安全与幻觉控制等方案级深度指标），以及如何通过微调 `document_analysis` 专属高合规权重、引入物理级场景检索防污染隔离、自适应展示企业知识库专项能力对比矩阵来实施彻底整改。"""
 
         vendor_info = []
         for v in top_vendors[:5]:

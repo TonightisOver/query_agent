@@ -208,4 +208,6 @@ def requirement_parser_node(state: dict) -> dict:
         parsed["analyst_thought"] = offline_thoughts.get(parsed.get("scenario"), "【离线专家分析】通用场景分析启动。评估策略将优先采用性价比（性价比考虑）最优排名曲线，推荐具备全能通识表现的厂商矩阵，规避单价过高的技术供应商，提供稳健的企业多模型路由配置方案。")
         trace_logs.append(f"🧠 **【大模型竞品分析师 · 业务场景与痛点洞察 (离线降级版)】**\n> {parsed['analyst_thought']}")
 
+    # 强制将 raw_query 清理为最原始且干净的 query，绝对防范 RAG/LLM 的任何提示词与历史背景污染
+    parsed["raw_query"] = query
     return {"parsed_requirement": parsed, "trace_logs": trace_logs}

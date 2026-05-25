@@ -43,9 +43,13 @@ SCENARIO_WEIGHT_OVERRIDES = {
     },
     "document_analysis": {
         "context_capability": 0.30,
+        "compliance_security": 0.25,
         "pricing_competitiveness": 0.15,
-        "multimodal_support": 0.15,
-        "performance_throughput": 0.10
+        "performance_throughput": 0.15,
+        "developer_ecosystem": 0.10,
+        "multimodal_support": 0.05,
+        "innovation_roadmap": 0.0,
+        "user_satisfaction": 0.0
     },
     "enterprise": {
         "compliance_security": 0.25,
@@ -164,7 +168,7 @@ def _compute_vendor_scores(vendor_name: str, vendor_data: dict, all_vendors_data
         compliance_score += 20  # 国际厂商全球合规
     strengths = _safe_get_nested(vendor_data, "user_feedback", "strengths", default=[])
     for s in strengths:
-        if any(kw in str(s) for kw in ["合规", "安全", "SOC", "隐私", "主权"]):
+        if any(kw in str(s) for kw in ["合规", "安全", "SOC", "隐私", "主权", "私有化", "本地化", "专有云", "数据不出域", "隔离", "SLA"]):
             compliance_score += 20
             break
     scores["compliance_security"] = float(min(100, compliance_score))
