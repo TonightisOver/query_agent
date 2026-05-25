@@ -143,6 +143,7 @@ def test_adaptive_appendix_c():
     state_da = {
         "reports_archive": mock_archive,
         "parsed_requirement": {"scenario": "data_analysis", "raw_query": "做一个 AI 数据分析助手"},
+        "has_matched_evidence": True,
         "trace_logs": []
     }
     res_da = writer_node(state_da)
@@ -186,6 +187,31 @@ def test_data_analysis_smart_query_workflow():
         query = "我想做一个 AI 数据分析助手，用户上传 Excel、CSV 或数据库数据后，可以让 AI 自动分析趋势、生成图表、解释异常、输出报告。请帮我分析这个场景需要对比哪些模型能力和产品能力。"
         
         competitors = ["OpenAI", "火山引擎"]
+        
+        # 注入用于数据分析的测试证据文档，确保 RAG 成功匹配并展现附录 C
+        from agents.rag_indexer import get_vector_store
+        store = get_vector_store()
+        store.add_documents(
+            chunks=[
+                "火山引擎 Doubao-Seed-2.0 is extremely powerful in python data cleaning, excel and csv table understanding, SQL database connection, chart generation and anomaly report rendering.",
+                "OpenAI is extremely powerful in python data cleaning, excel and csv table understanding, SQL database connection, chart generation and anomaly report rendering."
+            ],
+            metadata_list=[
+                {
+                    "doc_id": "test_da_volc",
+                    "chunk_id": 0,
+                    "source": "test_fixture",
+                    "scenario": "data_analysis"
+                },
+                {
+                    "doc_id": "test_da_openai",
+                    "chunk_id": 1,
+                    "source": "test_fixture",
+                    "scenario": "data_analysis"
+                }
+            ]
+        )
+        
         final_state = workflow.execute(competitors, smart_query=query)
 
         # 1. 验证场景识别正确
